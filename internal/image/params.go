@@ -20,7 +20,7 @@ func BuildParamsFromQuery(query url.Values) (ImageOptions, error) {
 	for key := range query {
 		value := query.Get(key)
 		if err := applyQueryParam(&options, key, value); err != nil {
-			return ImageOptions{}, fmt.Errorf(`error while processing parameter "%s" with value %q, error: %s`, key, value, err)
+			return ImageOptions{}, fmt.Errorf(`error while processing parameter "%s" with value %q, error: %w`, key, value, err)
 		}
 	}
 

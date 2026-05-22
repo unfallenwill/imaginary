@@ -15,7 +15,7 @@ import (
 
 const ImageSourceTypeObject source.ImageSourceType = "object"
 const ObjectQueryKey = "object"
-const objectStorageTimeout = 30 * time.Second
+const ObjectStorageTimeout = 30 * time.Second
 
 type ObjectImageSource struct {
 	Config *source.SourceConfig
@@ -35,11 +35,11 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	}
 
 	key := r.URL.Query().Get(ObjectQueryKey)
-	if err := validateObjectKey(key); err != nil {
+	if err := ValidateObjectKey(key); err != nil {
 		return nil, image.ErrInvalidFilePath
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), objectStorageTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), ObjectStorageTimeout)
 	defer cancel()
 
 	body, contentLength, err := s.Config.ObjectStorage.Open(ctx, key)
@@ -52,7 +52,7 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("object size %d exceeds maximum allowed %d bytes", contentLength, s.Config.MaxAllowedSize)
 	}
 
-	buf, err := readObjectBody(body, s.Config.MaxAllowedSize)
+	buf, err := ReadObjectBody(body, s.Config.MaxAllowedSize)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	return buf, nil
 }
 
-func readObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
+func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 	if maxAllowedSize <= 0 {
 		return io.ReadAll(body)
 	}
@@ -80,7 +80,7 @@ func readObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 	return buf, nil
 }
 
-func validateObjectKey(key string) error {
+func ValidateObjectKey(key string) error {
 	if key == "" || strings.Contains(key, "\\") {
 		return fmt.Errorf("invalid object key")
 	}

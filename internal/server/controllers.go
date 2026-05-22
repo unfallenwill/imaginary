@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -60,10 +61,11 @@ func imageController(cfg Config, resolver *source.Resolver, operation img.Operat
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			if xerr, ok := err.(img.Error); ok {
-				ErrorReply(w, req, xerr, cfg.Error)
+			var imgErr *img.Error
+			if errors.As(err, &imgErr) {
+				ErrorReply(w, req, imgErr, cfg.Error)
 			} else {
-				ErrorReply(w, req, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
+				ErrorReply(w, req, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
 			}
 			return
 		}
@@ -116,7 +118,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 
 	opts, err := img.BuildParamsFromQuery(r.URL.Query())
 	if err != nil {
-		ErrorReply(w, r, img.NewError("Error while processing parameters, "+err.Error(), img.KindInvalidParam), cfg.Error)
+		ErrorReply(w, r, img.WrapError("Error while processing parameters", img.KindInvalidParam, err), cfg.Error)
 		return
 	}
 
@@ -132,7 +134,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	sizeInfo, err := bimg.Size(buf)
 
 	if err != nil {
-		ErrorReply(w, r, img.NewError("Error while processing the image: "+err.Error(), img.KindProcessing), cfg.Error)
+		ErrorReply(w, r, img.WrapError("Error while processing the image", img.KindProcessing, err), cfg.Error)
 		return
 	}
 
@@ -148,7 +150,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	if opts.Image != "" && len(opts.ImageBytes) == 0 {
 		imageBytes, err := fetchRemoteImage(r.Context(), opts.Image, cfg.MaxAllowedSize)
 		if err != nil {
-			ErrorReply(w, r, img.NewError("Unable to fetch watermark image: "+err.Error(), img.KindInvalidParam), cfg.Error)
+			ErrorReply(w, r, img.WrapError("Unable to fetch watermark image", img.KindInvalidParam, err), cfg.Error)
 			return
 		}
 		opts.ImageBytes = imageBytes
@@ -160,7 +162,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		if opts.Operations[i].Name == "watermarkImage" && opts.Operations[i].Params.Image != "" {
 			imageBytes, err := fetchRemoteImage(r.Context(), opts.Operations[i].Params.Image, cfg.MaxAllowedSize)
 			if err != nil {
-				ErrorReply(w, r, img.NewError("Unable to fetch watermark image: "+err.Error(), img.KindInvalidParam), cfg.Error)
+				ErrorReply(w, r, img.WrapError("Unable to fetch watermark image", img.KindInvalidParam, err), cfg.Error)
 				return
 			}
 			opts.Operations[i].Params.ImageBytes = imageBytes
@@ -172,7 +174,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		if vary != "" {
 			w.Header().Set("Vary", vary)
 		}
-		ErrorReply(w, r, img.NewError("Error while processing the image: "+err.Error(), img.KindProcessing), cfg.Error)
+		ErrorReply(w, r, img.WrapError("Error while processing the image", img.KindProcessing, err), cfg.Error)
 		return
 	}
 

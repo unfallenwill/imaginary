@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/h2non/bimg"
@@ -163,7 +164,7 @@ func Parse(args []string) (CLIConfig, error) {
 // applyEnvOverrides applies environment variable overrides for select fields.
 func (c *CLIConfig) applyEnvOverrides() {
 	if portEnv := os.Getenv("PORT"); portEnv != "" {
-		if p, err := parseInt(portEnv); err == nil && p > 0 {
+		if p, err := strconv.Atoi(portEnv); err == nil && p > 0 {
 			c.Port = p
 		}
 	}
@@ -350,13 +351,4 @@ func parseOrigins(raw string) []*url.URL {
 		urls = append(urls, u)
 	}
 	return urls
-}
-
-func parseInt(s string) (int, error) {
-	if s == "" {
-		return 0, nil
-	}
-	var v int
-	_, err := fmt.Sscanf(s, "%d", &v)
-	return v, err
 }

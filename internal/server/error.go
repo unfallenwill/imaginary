@@ -2,8 +2,8 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/h2non/bimg"
 
@@ -33,8 +33,8 @@ var kindToHTTP = map[img.Kind]int{
 	img.KindProcessing:       http.StatusBadRequest,
 }
 
-// httpStatusFor maps an image.Error's Kind to an HTTP status code.
-func httpStatusFor(err img.Error) int {
+// httpStatusFor maps an *image.Error's Kind to an HTTP status code.
+func httpStatusFor(err *img.Error) int {
 	if code, ok := kindToHTTP[err.Kind]; ok {
 		return code
 	}
@@ -46,9 +46,9 @@ type errorResponse struct {
 	Status int    `json:"status"`
 }
 
-// ErrorReply writes an image.Error as an HTTP JSON response.
+// ErrorReply writes an *image.Error as an HTTP JSON response.
 // If placeholder is configured, it renders the placeholder image instead.
-func ErrorReply(w http.ResponseWriter, r *http.Request, err img.Error, cfg ErrorConfig) {
+func ErrorReply(w http.ResponseWriter, r *http.Request, err *img.Error, cfg ErrorConfig) {
 	if cfg.PlaceholderEnabled {
 		replyWithPlaceholder(w, r, err, cfg)
 		return
@@ -61,7 +61,7 @@ func ErrorReply(w http.ResponseWriter, r *http.Request, err img.Error, cfg Error
 	_, _ = w.Write(buf)
 }
 
-func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller img.Error, cfg ErrorConfig) {
+func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller *img.Error, cfg ErrorConfig) {
 	bimgOptions := bimg.Options{
 		Force:   true,
 		Crop:    true,
@@ -69,14 +69,14 @@ func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller img.
 		Type:    img.ImageType(r.URL.Query().Get("type")),
 	}
 
-	width, werr := parseInt(r.URL.Query().Get("width"))
+	width, werr := strconv.Atoi(r.URL.Query().Get("width"))
 	if werr != nil {
 		sendErrorResponse(w, http.StatusBadRequest, werr)
 		return
 	}
 	bimgOptions.Width = width
 
-	height, herr := parseInt(r.URL.Query().Get("height"))
+	height, herr := strconv.Atoi(r.URL.Query().Get("height"))
 	if herr != nil {
 		sendErrorResponse(w, http.StatusBadRequest, herr)
 		return
@@ -107,16 +107,7 @@ func sendErrorResponse(w http.ResponseWriter, statusCode int, err error) {
 	_, _ = w.Write(buf)
 }
 
-func errorReplyJSON(err img.Error, httpStatus int) []byte {
+func errorReplyJSON(err *img.Error, httpStatus int) []byte {
 	buf, _ := json.Marshal(errorResponse{Error: err.Error(), Status: httpStatus})
 	return buf
-}
-
-func parseInt(param string) (int, error) {
-	if param == "" {
-		return 0, nil
-	}
-	var v int
-	_, err := fmt.Sscanf(param, "%d", &v)
-	return v, err
 }

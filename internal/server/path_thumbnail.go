@@ -3,18 +3,15 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"path"
 	"strconv"
 	"strings"
-	"time"
 
 	img "github.com/h2non/imaginary/internal/image"
+	objectsource "github.com/h2non/imaginary/internal/source/object"
 )
-
-const objectStorageTimeout = 30 * time.Second
 
 type pathThumbnailParams struct {
 	Width   int
@@ -41,7 +38,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 
 		params, err := parsePathThumbnailParams(r.URL.Path, cfg.PathPrefix)
 		if err != nil {
-			ErrorReply(w, r, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
+			ErrorReply(w, r, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
 			return
 		}
 		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/1000000 > cfg.MaxAllowedPixels {
@@ -49,12 +46,12 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), objectStorageTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), objectsource.ObjectStorageTimeout)
 		defer cancel()
 
 		body, contentLength, err := cfg.ObjectStorage.Open(ctx, params.Key)
 		if err != nil {
-			ErrorReply(w, r, img.NewError(fmt.Sprintf("Error while fetching object: %s", err.Error()), img.KindInvalidParam), cfg.Error)
+			ErrorReply(w, r, img.WrapError("Error while fetching object", img.KindInvalidParam, err), cfg.Error)
 			return
 		}
 		defer func() { _ = body.Close() }()
@@ -64,9 +61,9 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		buf, err := readObjectBody(body, cfg.MaxAllowedSize)
+		buf, err := objectsource.ReadObjectBody(body, cfg.MaxAllowedSize)
 		if err != nil {
-			ErrorReply(w, r, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
+			ErrorReply(w, r, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
 			return
 		}
 		if len(buf) == 0 {
@@ -77,23 +74,6 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 		req := withPathThumbnailQuery(r, params)
 		imageHandler(w, req, buf, img.Thumbnail, cfg)
 	}
-}
-
-func readObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
-	if maxAllowedSize <= 0 {
-		return io.ReadAll(body)
-	}
-
-	limited := io.LimitReader(body, int64(maxAllowedSize)+1)
-	buf, err := io.ReadAll(limited)
-	if err != nil {
-		return nil, err
-	}
-	if len(buf) > maxAllowedSize {
-		return nil, fmt.Errorf("object body exceeds maximum allowed %d bytes", maxAllowedSize)
-	}
-
-	return buf, nil
 }
 
 func withPathThumbnailQuery(r *http.Request, params pathThumbnailParams) *http.Request {
@@ -141,7 +121,7 @@ func parsePathThumbnailParams(requestPath, prefix string) (pathThumbnailParams, 
 	if err != nil {
 		return params, err
 	}
-	if err := validateObjectKey(parts[1]); err != nil {
+	if err := objectsource.ValidateObjectKey(parts[1]); err != nil {
 		return params, err
 	}
 
@@ -206,24 +186,6 @@ func splitThumbnailSpecType(spec string) (string, string, error) {
 	}
 
 	return parts[0], imageType, nil
-}
-
-func validateObjectKey(key string) error {
-	if key == "" || strings.Contains(key, "\\") {
-		return fmt.Errorf("invalid object key")
-	}
-	for _, segment := range strings.Split(key, "/") {
-		if segment == "." || segment == ".." {
-			return fmt.Errorf("invalid object key")
-		}
-	}
-
-	cleaned := path.Clean("/" + key)
-	if cleaned == "/" {
-		return fmt.Errorf("invalid object key")
-	}
-
-	return nil
 }
 
 func thumbnailPathPattern(prefix string) string {

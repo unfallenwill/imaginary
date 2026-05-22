@@ -62,7 +62,7 @@ func Info(buf []byte, o ImageOptions) (Image, error) {
 
 	meta, err := bimg.Metadata(buf)
 	if err != nil {
-		return image, NewError("Cannot retrieve image metadata: "+err.Error(), KindProcessing)
+		return image, WrapError("Cannot retrieve image metadata", KindProcessing, err)
 	}
 
 	info := ImageInfo{

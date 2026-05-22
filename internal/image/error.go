@@ -25,19 +25,40 @@ const (
 
 // Error represents a domain-level image processing error.
 // It carries a semantic Kind, not an HTTP status code.
+// Error supports the Go 1.13+ error chain via Unwrap and Is,
+// so callers can use errors.Is and errors.As to inspect it.
 type Error struct {
 	Message string `json:"message,omitempty"`
 	Kind    Kind   `json:"code"`
+	err     error
 }
 
-func (e Error) Error() string {
+func (e *Error) Error() string {
+	if e.err != nil {
+		return e.Message + ": " + e.err.Error()
+	}
 	return e.Message
+}
+
+// Unwrap returns the wrapped underlying error, supporting errors.Is/As.
+func (e *Error) Unwrap() error {
+	return e.err
+}
+
+// Is supports errors.Is comparisons against sentinel Error values.
+// Two *Error values match if they have the same Kind.
+func (e *Error) Is(target error) bool {
+	t, ok := target.(*Error)
+	if !ok {
+		return false
+	}
+	return e.Kind == t.Kind
 }
 
 // JSON serializes the error for wire transport.
 // Note: the "status" field contains the semantic Kind code, not an HTTP status.
 // The server layer provides the HTTP status mapping where needed.
-func (e Error) JSON() []byte {
+func (e *Error) JSON() []byte {
 	type wire struct {
 		Message string `json:"message,omitempty"`
 		Status  int    `json:"status"`
@@ -46,10 +67,17 @@ func (e Error) JSON() []byte {
 	return buf
 }
 
-// NewError creates an image.Error with an explicit message and semantic kind.
-func NewError(message string, kind Kind) Error {
+// NewError creates an *image.Error with an explicit message and semantic kind.
+func NewError(message string, kind Kind) *Error {
 	message = strings.ReplaceAll(message, "\n", "")
-	return Error{Message: message, Kind: kind}
+	return &Error{Message: message, Kind: kind}
+}
+
+// WrapError creates an *image.Error that wraps an underlying error,
+// preserving the error chain for errors.Is/As.
+func WrapError(message string, kind Kind, err error) *Error {
+	message = strings.ReplaceAll(message, "\n", "")
+	return &Error{Message: message, Kind: kind, err: err}
 }
 
 var (
