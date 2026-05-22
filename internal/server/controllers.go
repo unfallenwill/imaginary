@@ -42,9 +42,9 @@ func healthController(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func imageController(o config.ServerOptions, operation img.Operation) func(http.ResponseWriter, *http.Request) {
+func imageController(o config.ServerOptions, resolver *source.Resolver, operation img.Operation) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		var imageSource = source.MatchSource(req)
+		var imageSource = resolver.Match(req)
 		if imageSource == nil {
 			img.ErrorReply(req, w, img.ErrMissingImageSource, o)
 			return

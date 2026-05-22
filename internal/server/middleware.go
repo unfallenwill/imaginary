@@ -16,6 +16,7 @@ import (
 
 	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )
 
@@ -41,9 +42,9 @@ func Middleware(fn func(http.ResponseWriter, *http.Request), o config.ServerOpti
 	return validate(defaultHeaders(next), o)
 }
 
-func ImageMiddleware(o config.ServerOptions) func(img.Operation) http.Handler {
+func ImageMiddleware(o config.ServerOptions, resolver *source.Resolver) func(img.Operation) http.Handler {
 	return func(fn img.Operation) http.Handler {
-		handler := validateImage(Middleware(imageController(o, fn), o), o)
+		handler := validateImage(Middleware(imageController(o, resolver, fn), o), o)
 
 		if o.EnableURLSignature {
 			return validateURLSignature(handler, o)

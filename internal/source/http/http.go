@@ -145,7 +145,3 @@ func shouldRestrictOrigin(url *url.URL, origins []*url.URL) bool {
 
 	return true
 }
-
-func init() {
-	source.RegisterSource(ImageSourceTypeHTTP, NewHTTPImageSource)
-}

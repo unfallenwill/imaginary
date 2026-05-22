@@ -7,21 +7,21 @@ import (
 
 	"github.com/h2non/imaginary/internal/config"
 	"github.com/h2non/imaginary/internal/source"
-
-	// Register source providers via init()
-	_ "github.com/h2non/imaginary/internal/source/body"
-	_ "github.com/h2non/imaginary/internal/source/fs"
-	_ "github.com/h2non/imaginary/internal/source/http"
+	bodysource "github.com/h2non/imaginary/internal/source/body"
+	httpsource "github.com/h2non/imaginary/internal/source/http"
 )
 
-func TestMatchSource(t *testing.T) {
+func TestResolverMatch(t *testing.T) {
 	opts := config.ServerOptions{EnableURLSource: true}
-	source.LoadSources(opts)
+	resolver := source.NewResolver(
+		bodysource.NewBodyImageSource(source.NewSourceConfig(opts, bodysource.ImageSourceTypeBody)),
+		httpsource.NewHTTPImageSource(source.NewSourceConfig(opts, httpsource.ImageSourceTypeHTTP)),
+	)
 
 	u, _ := url.Parse("http://foo?url=http://bar/image.jpg")
 	req := &http.Request{Method: http.MethodGet, URL: u}
 
-	src := source.MatchSource(req)
+	src := resolver.Match(req)
 	if src == nil {
 		t.Error("Cannot match image source")
 	}

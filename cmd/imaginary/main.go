@@ -18,15 +18,8 @@ import (
 	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/server"
-	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/storage"
 	"github.com/h2non/imaginary/internal/version"
-
-	// Register source providers via init()
-	_ "github.com/h2non/imaginary/internal/source/body"
-	_ "github.com/h2non/imaginary/internal/source/fs"
-	_ "github.com/h2non/imaginary/internal/source/http"
-	_ "github.com/h2non/imaginary/internal/source/object"
 )
 
 var (
@@ -251,9 +244,6 @@ func main() {
 	}
 
 	debug("imaginary server listening on port :%d/%s", opts.Port, strings.TrimPrefix(opts.PathPrefix, "/"))
-
-	// Load image source providers
-	source.LoadSources(opts)
 
 	// Start the server
 	server.Server(opts)

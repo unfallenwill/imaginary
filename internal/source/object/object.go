@@ -97,7 +97,3 @@ func validateObjectKey(key string) error {
 
 	return nil
 }
-
-func init() {
-	source.RegisterSource(ImageSourceTypeObject, NewObjectImageSource)
-}

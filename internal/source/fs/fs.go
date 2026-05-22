@@ -72,7 +72,3 @@ func (s *FileSystemImageSource) getFileParam(r *http.Request) (string, error) {
 
 	return unescaped, nil
 }
-
-func init() {
-	source.RegisterSource(ImageSourceTypeFileSystem, NewFileSystemImageSource)
-}

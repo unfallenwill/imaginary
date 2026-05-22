@@ -13,6 +13,11 @@ import (
 
 	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/source"
+	bodysource "github.com/h2non/imaginary/internal/source/body"
+	fssource "github.com/h2non/imaginary/internal/source/fs"
+	httpsource "github.com/h2non/imaginary/internal/source/http"
+	objectsource "github.com/h2non/imaginary/internal/source/object"
 )
 
 func Server(o config.ServerOptions) {
@@ -62,13 +67,28 @@ func join(o config.ServerOptions, route string) string {
 
 // NewServerMux creates a new HTTP server route multiplexer.
 func NewServerMux(o config.ServerOptions) http.Handler {
+	return NewServerMuxWithResolver(o, NewSourceResolver(o))
+}
+
+// NewSourceResolver creates the default source resolver for image requests.
+func NewSourceResolver(o config.ServerOptions) *source.Resolver {
+	return source.NewResolver(
+		bodysource.NewBodyImageSource(source.NewSourceConfig(o, bodysource.ImageSourceTypeBody)),
+		objectsource.NewObjectImageSource(source.NewSourceConfig(o, objectsource.ImageSourceTypeObject)),
+		fssource.NewFileSystemImageSource(source.NewSourceConfig(o, fssource.ImageSourceTypeFileSystem)),
+		httpsource.NewHTTPImageSource(source.NewSourceConfig(o, httpsource.ImageSourceTypeHTTP)),
+	)
+}
+
+// NewServerMuxWithResolver creates a new HTTP server route multiplexer with an explicit source resolver.
+func NewServerMuxWithResolver(o config.ServerOptions, resolver *source.Resolver) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.Handle(join(o, "/"), Middleware(indexController(o), o))
 	mux.Handle(join(o, "/form"), Middleware(formController(o), o))
 	mux.Handle(join(o, "/health"), Middleware(healthController, o))
 
-	image := ImageMiddleware(o)
+	image := ImageMiddleware(o, resolver)
 	mux.Handle(join(o, "/resize"), image(img.Resize))
 	mux.Handle(join(o, "/fit"), image(img.Fit))
 	mux.Handle(join(o, "/enlarge"), image(img.Enlarge))

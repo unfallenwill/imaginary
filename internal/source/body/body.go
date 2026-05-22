@@ -60,7 +60,3 @@ func readFormBody(r *http.Request) ([]byte, error) {
 func readRawBody(r *http.Request) ([]byte, error) {
 	return io.ReadAll(r.Body)
 }
-
-func init() {
-	source.RegisterSource(ImageSourceTypeBody, NewBodyImageSource)
-}

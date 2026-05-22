@@ -16,13 +16,6 @@ import (
 
 	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
-	"github.com/h2non/imaginary/internal/source"
-
-	// Register source providers via init()
-	_ "github.com/h2non/imaginary/internal/source/body"
-	_ "github.com/h2non/imaginary/internal/source/fs"
-	_ "github.com/h2non/imaginary/internal/source/http"
-	_ "github.com/h2non/imaginary/internal/source/object"
 )
 
 type fakeObjectStorage struct {
@@ -298,8 +291,7 @@ func TestFit(t *testing.T) {
 
 func TestRemoteHTTPSource(t *testing.T) {
 	opts := config.ServerOptions{EnableURLSource: true, MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts)(img.Crop)
-	source.LoadSources(opts)
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
 
 	tsImage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
@@ -339,8 +331,7 @@ func TestRemoteHTTPSource(t *testing.T) {
 
 func TestInvalidRemoteHTTPSource(t *testing.T) {
 	opts := config.ServerOptions{EnableURLSource: true, MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts)(img.Crop)
-	source.LoadSources(opts)
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
 
 	tsImage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(400)
@@ -362,8 +353,7 @@ func TestInvalidRemoteHTTPSource(t *testing.T) {
 
 func TestMountDirectory(t *testing.T) {
 	opts := config.ServerOptions{Mount: "../../testdata", MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts)(img.Crop)
-	source.LoadSources(opts)
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
 
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?width=200&height=200&file=large.jpg"
@@ -396,8 +386,8 @@ func TestMountDirectory(t *testing.T) {
 }
 
 func TestMountInvalidDirectory(t *testing.T) {
-	fn := ImageMiddleware(config.ServerOptions{Mount: "_invalid_", MaxAllowedPixels: 18.0})(img.Crop)
-	source.LoadSources(config.ServerOptions{Mount: "_invalid_", MaxAllowedPixels: 18.0})
+	opts := config.ServerOptions{Mount: "_invalid_", MaxAllowedPixels: 18.0}
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120&file=large.jpg"
 	defer ts.Close()
@@ -413,8 +403,8 @@ func TestMountInvalidDirectory(t *testing.T) {
 }
 
 func TestMountInvalidPath(t *testing.T) {
-	fn := ImageMiddleware(config.ServerOptions{Mount: "_invalid_"})(img.Crop)
-	source.LoadSources(config.ServerOptions{Mount: "_invalid_"})
+	opts := config.ServerOptions{Mount: "_invalid_"}
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120&file=../../large.jpg"
 	defer ts.Close()
@@ -546,8 +536,7 @@ func TestObjectStorageSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
 	}
-	fn := ImageMiddleware(opts)(img.Thumbnail)
-	source.LoadSources(opts)
+	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Thumbnail)
 
 	ts := httptest.NewServer(fn)
 	defer ts.Close()
