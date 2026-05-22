@@ -2,21 +2,15 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 	"runtime"
 	d "runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/h2non/bimg"
-
 	"github.com/h2non/imaginary/internal/config"
-	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/server"
 	"github.com/h2non/imaginary/internal/source"
 	bodysource "github.com/h2non/imaginary/internal/source/body"
@@ -25,45 +19,6 @@ import (
 	objectsource "github.com/h2non/imaginary/internal/source/object"
 	"github.com/h2non/imaginary/internal/storage"
 	"github.com/h2non/imaginary/internal/version"
-)
-
-var (
-	aAddr               = flag.String("a", "", "Bind address")
-	aPort               = flag.Int("p", 8088, "Port to listen")
-	aVers               = flag.Bool("v", false, "Show version")
-	aVersl              = flag.Bool("version", false, "Show version")
-	aHelp               = flag.Bool("h", false, "Show help")
-	aHelpl              = flag.Bool("help", false, "Show help")
-	aPathPrefix         = flag.String("path-prefix", "/", "Url path prefix to listen to")
-	aCors               = flag.Bool("cors", false, "Enable CORS support")
-	aGzip               = flag.Bool("gzip", false, "Enable gzip compression (deprecated)")
-	aAuthForwarding     = flag.Bool("enable-auth-forwarding", false, "Forwards X-Forward-Authorization or Authorization header to the image source server. -enable-url-source flag must be defined. Tip: secure your server from public access to prevent attack vectors")
-	aEnableURLSource    = flag.Bool("enable-url-source", false, "Enable remote HTTP URL image source processing")
-	aEnablePlaceholder  = flag.Bool("enable-placeholder", false, "Enable image response placeholder to be used in case of error")
-	aEnableURLSignature = flag.Bool("enable-url-signature", false, "Enable URL signature (URL-safe Base64-encoded HMAC digest)")
-	aURLSignatureKey    = flag.String("url-signature-key", "", "The URL signature key (32 characters minimum)")
-	aAllowedOrigins     = flag.String("allowed-origins", "", "Restrict remote image source processing to certain origins (separated by commas). Note: Origins are validated against host *AND* path.")
-	aMaxAllowedSize     = flag.Int("max-allowed-size", 0, "Restrict maximum size of http image source (in bytes)")
-	aMaxAllowedPixels   = flag.Float64("max-allowed-resolution", 18.0, "Restrict maximum resolution of the image (in megapixels)")
-	aKey                = flag.String("key", "", "Define API key for authorization")
-	aMount              = flag.String("mount", "", "Mount server local directory")
-	aCertFile           = flag.String("certfile", "", "TLS certificate file path")
-	aKeyFile            = flag.String("keyfile", "", "TLS private key file path")
-	aAuthorization      = flag.String("authorization", "", "Defines a constant Authorization header value passed to all the image source servers. -enable-url-source flag must be defined. This overwrites authorization headers forwarding behavior via X-Forward-Authorization")
-	aForwardHeaders     = flag.String("forward-headers", "", "Forwards custom headers to the image source server. -enable-url-source flag must be defined.")
-	aPlaceholder        = flag.String("placeholder", "", "Image path to image custom placeholder to be used in case of error. Recommended minimum image size is: 1200x1200")
-	aPlaceholderStatus  = flag.Int("placeholder-status", 0, "HTTP status returned when use -placeholder flag")
-	aDisableEndpoints   = flag.String("disable-endpoints", "", "Comma separated endpoints to disable. E.g: form,crop,rotate,health")
-	aHTTPCacheTTL       = flag.Int("http-cache-ttl", -1, "The TTL in seconds")
-	aReadTimeout        = flag.Int("http-read-timeout", 60, "HTTP read timeout in seconds")
-	aWriteTimeout       = flag.Int("http-write-timeout", 60, "HTTP write timeout in seconds")
-	aConcurrency        = flag.Int("concurrency", 0, "Throttle concurrency limit per second")
-	aBurst              = flag.Int("burst", 100, "Throttle burst max cache size")
-	aMRelease           = flag.Int("mrelease", 30, "OS memory release interval in seconds")
-	aCpus               = flag.Int("cpus", runtime.GOMAXPROCS(-1), "Number of cpu cores to use")
-	aLogLevel           = flag.String("log-level", "info", "Define log level for http-server. E.g: info,warning,error")
-	aReturnSize         = flag.Bool("return-size", false, "Return the image size in the HTTP headers")
-	aConfig             = flag.String("config", "", "JSON config file path")
 )
 
 const usage = `imaginary %s
@@ -126,276 +81,91 @@ Options:
 `
 
 func main() {
-	flag.Usage = func() {
-		_, _ = fmt.Fprintf(os.Stderr, usage, version.Version, runtime.NumCPU())
-	}
-	flag.Parse()
-
-	if *aHelp || *aHelpl {
-		showUsage()
-	}
-	if *aVers || *aVersl {
-		showVersion()
+	cfg, err := config.Parse(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
-	// Only required in Go < 1.5
-	runtime.GOMAXPROCS(*aCpus)
-
-	port := getPort(*aPort)
-	urlSignatureKey := getURLSignatureKey()
-	maxAllowedSize := *aMaxAllowedSize
-
-	// Resolve storage configuration
-	var storageOpts config.StorageOptions
-	if *aConfig != "" {
-		fileOptions, err := config.LoadFile(*aConfig)
-		if err != nil {
-			exitWithError("cannot load config file: %s", err)
-		}
-		storageOpts = fileOptions.Storage
+	if cfg.ShowHelp {
+		fmt.Fprintf(os.Stderr, usage, version.Version, runtime.NumCPU())
+		os.Exit(1)
+	}
+	if cfg.ShowVersion {
+		fmt.Println(version.Version)
+		os.Exit(0)
 	}
 
-	// Show warning if gzip flag is passed
-	if *aGzip {
-		fmt.Println("warning: -gzip flag is deprecated and will not have effect")
+	if err := cfg.Validate(); err != nil {
+		exitWithError(err.Error())
 	}
 
-	// Create a memory release goroutine
-	if *aMRelease > 0 {
-		memoryRelease(*aMRelease)
+	runtime.GOMAXPROCS(cfg.CPUs)
+
+	if cfg.MRelease > 0 {
+		startMemoryRelease(cfg.MRelease)
 	}
 
-	// Check if the mount directory exists, if present
-	if *aMount != "" {
-		checkMountDirectory(*aMount)
+	if err := cfg.LoadStorage(); err != nil {
+		exitWithError(err.Error())
 	}
 
-	// Validate HTTP cache param, if present
-	if *aHTTPCacheTTL != -1 {
-		checkHTTPCacheTTL(*aHTTPCacheTTL)
+	placeholderImage, placeholderEnabled, err := cfg.ResolvePlaceholder()
+	if err != nil {
+		exitWithError(err.Error())
 	}
 
-	// Parse disabled endpoints
-	var endpoints server.EndpointSet
-	if *aDisableEndpoints != "" {
-		endpoints = parseEndpoints(*aDisableEndpoints)
+	objectStorage, err := resolveObjectStorage(cfg)
+	if err != nil {
+		exitWithError(err.Error())
 	}
 
-	// Resolve placeholder image
-	var placeholderImage []byte
-	placeholderEnabled := false
-	if *aPlaceholder != "" {
-		buf, err := os.ReadFile(*aPlaceholder)
-		if err != nil {
-			exitWithError("cannot start the server: %s", err)
-		}
+	resolver := buildResolver(cfg, objectStorage)
 
-		imageType := bimg.DetermineImageType(buf)
-		if !bimg.IsImageTypeSupportedByVips(imageType).Load {
-			exitWithError("Placeholder image type is not supported. Only JPEG, PNG or WEBP are supported")
-		}
+	serverCfg := cfg.ToServerConfig(placeholderImage, placeholderEnabled)
+	serverCfg.ObjectStorage = objectStorage
+	serverCfg.Resolver = resolver
 
-		placeholderImage = buf
-		placeholderEnabled = true
-	} else if *aEnablePlaceholder {
-		placeholderImage = img.Placeholder
-		placeholderEnabled = true
+	debug("imaginary server listening on port :%d/%s", serverCfg.Port, strings.TrimPrefix(serverCfg.PathPrefix, "/"))
+
+	server.Server(serverCfg)
+}
+
+func resolveObjectStorage(cfg config.CLIConfig) (source.ObjectStorage, error) {
+	if cfg.Storage.Type == "" {
+		return nil, nil
 	}
+	return storage.NewProvider(context.Background(), cfg.Storage)
+}
 
-	// Check URL signature key, if required
-	if *aEnableURLSignature {
-		if urlSignatureKey == "" {
-			exitWithError("URL signature key is required")
-		}
-
-		if len(urlSignatureKey) < 32 {
-			exitWithError("URL signature key must be a minimum of 32 characters")
-		}
-	}
-
-	// Resolve object storage
-	var objectStorage source.ObjectStorage
-	if storageOpts.Type != "" {
-		var err error
-		objectStorage, err = storage.NewProvider(context.Background(), storageOpts)
-		if err != nil {
-			exitWithError("cannot configure object storage: %s", err)
-		}
-	}
-
-	// Build source resolver
-	resolver := source.NewResolver(
+func buildResolver(cfg config.CLIConfig, objectStorage source.ObjectStorage) *source.Resolver {
+	return source.NewResolver(
 		bodysource.NewBodyImageSource(&source.SourceConfig{
 			Type:           bodysource.ImageSourceTypeBody,
 			ObjectStorage:  objectStorage,
-			MaxAllowedSize: maxAllowedSize,
+			MaxAllowedSize: cfg.MaxAllowedSize,
 		}),
 		objectsource.NewObjectImageSource(&source.SourceConfig{
 			Type:           objectsource.ImageSourceTypeObject,
 			ObjectStorage:  objectStorage,
-			MaxAllowedSize: maxAllowedSize,
+			MaxAllowedSize: cfg.MaxAllowedSize,
 		}),
 		fssource.NewFileSystemImageSource(&source.SourceConfig{
 			Type:      fssource.ImageSourceTypeFileSystem,
-			MountPath: *aMount,
+			MountPath: cfg.Mount,
 		}),
 		httpsource.NewHTTPImageSource(&source.SourceConfig{
 			Type:           httpsource.ImageSourceTypeHTTP,
-			AuthForwarding: *aAuthForwarding,
-			Authorization:  *aAuthorization,
-			ForwardHeaders: parseForwardHeaders(*aForwardHeaders),
-			AllowedOrigins: parseOrigins(*aAllowedOrigins),
-			MaxAllowedSize: maxAllowedSize,
+			AuthForwarding: cfg.AuthForwarding,
+			Authorization:  cfg.Authorization,
+			ForwardHeaders: cfg.ForwardHeaders,
+			AllowedOrigins: cfg.AllowedOrigins,
+			MaxAllowedSize: cfg.MaxAllowedSize,
 		}),
 	)
-
-	// Build server config
-	cfg := server.Config{
-		Addr:               *aAddr,
-		Port:               port,
-		HTTPReadTimeout:    *aReadTimeout,
-		HTTPWriteTimeout:   *aWriteTimeout,
-		CertFile:           *aCertFile,
-		KeyFile:            *aKeyFile,
-		LogLevel:           getLogLevel(*aLogLevel),
-		PathPrefix:         *aPathPrefix,
-		CORS:               *aCors,
-		APIKey:             *aKey,
-		Concurrency:        *aConcurrency,
-		Burst:              *aBurst,
-		HTTPCacheTTL:       *aHTTPCacheTTL,
-		EnableURLSource:    *aEnableURLSource,
-		Mount:              *aMount,
-		EnableURLSignature: *aEnableURLSignature,
-		URLSignatureKey:    urlSignatureKey,
-		Endpoints:          endpoints,
-		MaxAllowedPixels:   *aMaxAllowedPixels,
-		MaxAllowedSize:     maxAllowedSize,
-		ReturnSize:         *aReturnSize,
-		Error: server.ErrorConfig{
-			PlaceholderEnabled: placeholderEnabled,
-			PlaceholderImage:   placeholderImage,
-			PlaceholderStatus:  *aPlaceholderStatus,
-		},
-		ObjectStorage: objectStorage,
-		Resolver:      resolver,
-	}
-
-	debug("imaginary server listening on port :%d/%s", cfg.Port, strings.TrimPrefix(cfg.PathPrefix, "/"))
-
-	// Start the server
-	server.Server(cfg)
 }
 
-func getPort(port int) int {
-	if portEnv := os.Getenv("PORT"); portEnv != "" {
-		newPort, _ := strconv.Atoi(portEnv)
-		if newPort > 0 {
-			port = newPort
-		}
-	}
-	return port
-}
-
-func getURLSignatureKey() string {
-	key := *aURLSignatureKey
-	if keyEnv := os.Getenv("URL_SIGNATURE_KEY"); keyEnv != "" {
-		key = keyEnv
-	}
-	return key
-}
-
-func getLogLevel(logLevel string) string {
-	if logLevelEnv := os.Getenv("GOLANG_LOG"); logLevelEnv != "" {
-		logLevel = logLevelEnv
-	}
-	return logLevel
-}
-
-func showUsage() {
-	flag.Usage()
-	os.Exit(1)
-}
-
-func showVersion() {
-	fmt.Println(version.Version)
-	os.Exit(1)
-}
-
-func checkMountDirectory(path string) {
-	src, err := os.Stat(path)
-	if err != nil {
-		exitWithError("error while mounting directory: %s", err)
-	}
-	if !src.IsDir() {
-		exitWithError("mount path is not a directory: %s", path)
-	}
-	if path == "/" {
-		exitWithError("cannot mount root directory for security reasons")
-	}
-}
-
-func checkHTTPCacheTTL(ttl int) {
-	if ttl < 0 || ttl > 31556926 {
-		exitWithError("The -http-cache-ttl flag only accepts a value from 0 to 31556926")
-	}
-
-	if ttl == 0 {
-		debug("Adding HTTP cache control headers set to prevent caching.")
-	}
-}
-
-func parseForwardHeaders(forwardHeaders string) []string {
-	var headers []string
-	if forwardHeaders == "" {
-		return headers
-	}
-
-	for _, header := range strings.Split(forwardHeaders, ",") {
-		if norm := strings.TrimSpace(header); norm != "" {
-			headers = append(headers, norm)
-		}
-	}
-	return headers
-}
-
-func parseOrigins(origins string) []*url.URL {
-	var urls []*url.URL
-	if origins == "" {
-		return urls
-	}
-	for _, origin := range strings.Split(origins, ",") {
-		u, err := url.Parse(origin)
-		if err != nil {
-			continue
-		}
-
-		if u.Path != "" {
-			var lastChar = u.Path[len(u.Path)-1:]
-			if lastChar == "*" {
-				u.Path = strings.TrimSuffix(u.Path, "*")
-			} else if lastChar != "/" {
-				u.Path += "/"
-			}
-		}
-
-		urls = append(urls, u)
-	}
-	return urls
-}
-
-func parseEndpoints(input string) server.EndpointSet {
-	var endpoints server.EndpointSet
-	for _, endpoint := range strings.Split(input, ",") {
-		endpoint = strings.ToLower(strings.TrimSpace(endpoint))
-		if endpoint != "" {
-			endpoints = append(endpoints, endpoint)
-		}
-	}
-	return endpoints
-}
-
-func memoryRelease(interval int) {
+func startMemoryRelease(interval int) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	go func() {
 		for range ticker.C {
@@ -405,14 +175,13 @@ func memoryRelease(interval int) {
 	}()
 }
 
-func exitWithError(format string, args ...interface{}) {
-	_, _ = fmt.Fprintf(os.Stderr, format+"\n", args)
+func exitWithError(msg string) {
+	fmt.Fprintln(os.Stderr, msg)
 	os.Exit(1)
 }
 
 func debug(msg string, values ...interface{}) {
-	debug := os.Getenv("DEBUG")
-	if debug == "imaginary" || debug == "*" {
+	if dbg := os.Getenv("DEBUG"); dbg == "imaginary" || dbg == "*" {
 		log.Printf(msg, values...)
 	}
 }

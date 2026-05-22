@@ -1,0 +1,362 @@
+package config
+
+import (
+	"flag"
+	"fmt"
+	"net/url"
+	"os"
+	"runtime"
+	"strings"
+
+	"github.com/h2non/bimg"
+
+	img "github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/server"
+)
+
+// CLIConfig holds all configuration parsed from command-line flags,
+// environment variables, and optional JSON config file.
+type CLIConfig struct {
+	// Meta
+	ShowHelp    bool
+	ShowVersion bool
+
+	// Network
+	Addr     string
+	Port     int
+	CertFile string
+	KeyFile  string
+
+	// Timeouts
+	HTTPReadTimeout  int
+	HTTPWriteTimeout int
+
+	// Logging
+	LogLevel string
+
+	// Routing
+	PathPrefix string
+
+	// Middleware
+	CORS        bool
+	APIKey      string
+	Concurrency int
+	Burst       int
+
+	// Caching
+	HTTPCacheTTL int
+
+	// URL source
+	EnableURLSource    bool
+	AuthForwarding     bool
+	Authorization      string
+	ForwardHeaders     []string
+	AllowedOrigins     []*url.URL
+	MaxAllowedSize     int
+	MaxAllowedPixels   float64
+	EnableURLSignature bool
+	URLSignatureKey    string
+
+	// Filesystem
+	Mount string
+
+	// Endpoints
+	DisableEndpoints string
+
+	// Placeholder
+	EnablePlaceholder bool
+	Placeholder       string
+	PlaceholderStatus int
+
+	// Resource management
+	CPUs     int
+	MRelease int
+
+	// Response
+	ReturnSize bool
+
+	// Config file
+	ConfigFile string
+
+	// Deprecated
+	Gzip bool
+
+	// Resolved from config file
+	Storage StorageOptions
+
+	// internal: raw flag values parsed before conversion
+	forwardHeadersRaw string
+	allowedOriginsRaw string
+}
+
+// DefaultConfig returns a CLIConfig with sensible defaults.
+func DefaultConfig() CLIConfig {
+	return CLIConfig{
+		Port:             8088,
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		HTTPReadTimeout:  60,
+		HTTPWriteTimeout: 60,
+		LogLevel:         "info",
+		Burst:            100,
+		MRelease:         30,
+		CPUs:             runtime.GOMAXPROCS(-1),
+		HTTPCacheTTL:     -1,
+	}
+}
+
+// Parse parses command-line flags and environment variables into a CLIConfig.
+func Parse(args []string) (CLIConfig, error) {
+	cfg := DefaultConfig()
+
+	fs := flag.NewFlagSet("imaginary", flag.ContinueOnError)
+
+	fs.BoolVar(&cfg.ShowHelp, "h", false, "Show help")
+	fs.BoolVar(&cfg.ShowHelp, "help", false, "Show help")
+	fs.BoolVar(&cfg.ShowVersion, "v", false, "Show version")
+	fs.BoolVar(&cfg.ShowVersion, "version", false, "Show version")
+
+	fs.StringVar(&cfg.Addr, "a", cfg.Addr, "Bind address")
+	fs.IntVar(&cfg.Port, "p", cfg.Port, "Port to listen")
+	fs.StringVar(&cfg.PathPrefix, "path-prefix", cfg.PathPrefix, "URL path prefix to listen to")
+	fs.BoolVar(&cfg.CORS, "cors", cfg.CORS, "Enable CORS support")
+	fs.BoolVar(&cfg.Gzip, "gzip", cfg.Gzip, "Enable gzip compression (deprecated)")
+	fs.BoolVar(&cfg.AuthForwarding, "enable-auth-forwarding", cfg.AuthForwarding, "Forward Authorization header to image source server")
+	fs.BoolVar(&cfg.EnableURLSource, "enable-url-source", cfg.EnableURLSource, "Enable remote HTTP URL image source processing")
+	fs.BoolVar(&cfg.EnablePlaceholder, "enable-placeholder", cfg.EnablePlaceholder, "Enable image placeholder on error")
+	fs.BoolVar(&cfg.EnableURLSignature, "enable-url-signature", cfg.EnableURLSignature, "Enable URL signature")
+	fs.StringVar(&cfg.URLSignatureKey, "url-signature-key", cfg.URLSignatureKey, "URL signature key (32 characters minimum)")
+	fs.Var(&stringValue{dst: &cfg.allowedOriginsRaw}, "allowed-origins", "Restrict remote image source to certain origins (comma-separated)")
+	fs.IntVar(&cfg.MaxAllowedSize, "max-allowed-size", cfg.MaxAllowedSize, "Max size of HTTP image source in bytes")
+	fs.Float64Var(&cfg.MaxAllowedPixels, "max-allowed-resolution", cfg.MaxAllowedPixels, "Max image resolution in megapixels")
+	fs.StringVar(&cfg.APIKey, "key", cfg.APIKey, "API key for authorization")
+	fs.StringVar(&cfg.Mount, "mount", cfg.Mount, "Mount local directory")
+	fs.StringVar(&cfg.CertFile, "certfile", cfg.CertFile, "TLS certificate file path")
+	fs.StringVar(&cfg.KeyFile, "keyfile", cfg.KeyFile, "TLS private key file path")
+	fs.StringVar(&cfg.Authorization, "authorization", cfg.Authorization, "Constant Authorization header for image source servers")
+	fs.Var(&stringValue{dst: &cfg.forwardHeadersRaw}, "forward-headers", "Custom headers to forward to image source (comma-separated)")
+	fs.StringVar(&cfg.Placeholder, "placeholder", cfg.Placeholder, "Custom placeholder image path")
+	fs.IntVar(&cfg.PlaceholderStatus, "placeholder-status", cfg.PlaceholderStatus, "HTTP status for placeholder response")
+	fs.StringVar(&cfg.DisableEndpoints, "disable-endpoints", cfg.DisableEndpoints, "Comma-separated endpoints to disable")
+	fs.IntVar(&cfg.HTTPCacheTTL, "http-cache-ttl", cfg.HTTPCacheTTL, "HTTP cache TTL in seconds")
+	fs.IntVar(&cfg.HTTPReadTimeout, "http-read-timeout", cfg.HTTPReadTimeout, "HTTP read timeout in seconds")
+	fs.IntVar(&cfg.HTTPWriteTimeout, "http-write-timeout", cfg.HTTPWriteTimeout, "HTTP write timeout in seconds")
+	fs.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "Throttle concurrency limit per second")
+	fs.IntVar(&cfg.Burst, "burst", cfg.Burst, "Throttle burst max cache size")
+	fs.IntVar(&cfg.MRelease, "mrelease", cfg.MRelease, "Memory release interval in seconds")
+	fs.IntVar(&cfg.CPUs, "cpus", cfg.CPUs, "Number of CPU cores to use")
+	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info, warning, error")
+	fs.BoolVar(&cfg.ReturnSize, "return-size", cfg.ReturnSize, "Return image size in HTTP headers")
+	fs.StringVar(&cfg.ConfigFile, "config", cfg.ConfigFile, "JSON config file path")
+
+	if err := fs.Parse(args); err != nil {
+		return CLIConfig{}, err
+	}
+
+	cfg.applyEnvOverrides()
+	cfg.ForwardHeaders = parseForwardHeaders(cfg.forwardHeadersRaw)
+	cfg.AllowedOrigins = parseOrigins(cfg.allowedOriginsRaw)
+
+	return cfg, nil
+}
+
+// applyEnvOverrides applies environment variable overrides for select fields.
+func (c *CLIConfig) applyEnvOverrides() {
+	if portEnv := os.Getenv("PORT"); portEnv != "" {
+		if p, err := parseInt(portEnv); err == nil && p > 0 {
+			c.Port = p
+		}
+	}
+	if keyEnv := os.Getenv("URL_SIGNATURE_KEY"); keyEnv != "" {
+		c.URLSignatureKey = keyEnv
+	}
+	if logEnv := os.Getenv("GOLANG_LOG"); logEnv != "" {
+		c.LogLevel = logEnv
+	}
+}
+
+// Validate checks the configuration for errors.
+func (c CLIConfig) Validate() error {
+	if c.Mount != "" {
+		src, err := os.Stat(c.Mount)
+		if err != nil {
+			return fmt.Errorf("error while mounting directory: %w", err)
+		}
+		if !src.IsDir() {
+			return fmt.Errorf("mount path is not a directory: %s", c.Mount)
+		}
+		if c.Mount == "/" {
+			return fmt.Errorf("cannot mount root directory for security reasons")
+		}
+	}
+
+	if c.HTTPCacheTTL != -1 {
+		if c.HTTPCacheTTL < 0 || c.HTTPCacheTTL > 31556926 {
+			return fmt.Errorf("the -http-cache-ttl flag only accepts a value from 0 to 31556926")
+		}
+	}
+
+	if c.EnableURLSignature {
+		if c.URLSignatureKey == "" {
+			return fmt.Errorf("URL signature key is required")
+		}
+		if len(c.URLSignatureKey) < 32 {
+			return fmt.Errorf("URL signature key must be a minimum of 32 characters")
+		}
+	}
+
+	if c.Gzip {
+		fmt.Println("warning: -gzip flag is deprecated and will not have effect")
+	}
+
+	return nil
+}
+
+// LoadStorage reads the JSON config file and populates Storage options.
+func (c *CLIConfig) LoadStorage() error {
+	if c.ConfigFile == "" {
+		return nil
+	}
+	fileOptions, err := LoadFile(c.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("cannot load config file: %w", err)
+	}
+	c.Storage = fileOptions.Storage
+	return nil
+}
+
+// ResolvePlaceholder loads the placeholder image bytes if configured.
+func (c CLIConfig) ResolvePlaceholder() ([]byte, bool, error) {
+	if c.Placeholder != "" {
+		buf, err := os.ReadFile(c.Placeholder) // #nosec G304 -- path provided by server operator
+		if err != nil {
+			return nil, false, fmt.Errorf("cannot start the server: %w", err)
+		}
+		imageType := bimg.DetermineImageType(buf)
+		if !bimg.IsImageTypeSupportedByVips(imageType).Load {
+			return nil, false, fmt.Errorf("placeholder image type is not supported. Only JPEG, PNG or WEBP are supported")
+		}
+		return buf, true, nil
+	}
+
+	if c.EnablePlaceholder {
+		return img.Placeholder, true, nil
+	}
+
+	return nil, false, nil
+}
+
+// ParseEndpoints returns a server.EndpointSet from the disable-endpoints string.
+func (c CLIConfig) ParseEndpoints() server.EndpointSet {
+	if c.DisableEndpoints == "" {
+		return nil
+	}
+	var endpoints server.EndpointSet
+	for _, ep := range strings.Split(c.DisableEndpoints, ",") {
+		if norm := strings.ToLower(strings.TrimSpace(ep)); norm != "" {
+			endpoints = append(endpoints, norm)
+		}
+	}
+	return endpoints
+}
+
+// ToServerConfig converts CLIConfig into a server.Config, resolving all
+// runtime dependencies (placeholder image, endpoints).
+func (c CLIConfig) ToServerConfig(placeholderImage []byte, placeholderEnabled bool) server.Config {
+	return server.Config{
+		Addr:               c.Addr,
+		Port:               c.Port,
+		HTTPReadTimeout:    c.HTTPReadTimeout,
+		HTTPWriteTimeout:   c.HTTPWriteTimeout,
+		CertFile:           c.CertFile,
+		KeyFile:            c.KeyFile,
+		LogLevel:           c.LogLevel,
+		PathPrefix:         c.PathPrefix,
+		CORS:               c.CORS,
+		APIKey:             c.APIKey,
+		Concurrency:        c.Concurrency,
+		Burst:              c.Burst,
+		HTTPCacheTTL:       c.HTTPCacheTTL,
+		EnableURLSource:    c.EnableURLSource,
+		Mount:              c.Mount,
+		EnableURLSignature: c.EnableURLSignature,
+		URLSignatureKey:    c.URLSignatureKey,
+		Endpoints:          c.ParseEndpoints(),
+		MaxAllowedPixels:   c.MaxAllowedPixels,
+		MaxAllowedSize:     c.MaxAllowedSize,
+		ReturnSize:         c.ReturnSize,
+		Error: server.ErrorConfig{
+			PlaceholderEnabled: placeholderEnabled,
+			PlaceholderImage:   placeholderImage,
+			PlaceholderStatus:  c.PlaceholderStatus,
+		},
+	}
+}
+
+// stringValue implements flag.Value for a simple string destination.
+type stringValue struct {
+	dst *string
+}
+
+func (s *stringValue) String() string {
+	if s.dst == nil {
+		return ""
+	}
+	return *s.dst
+}
+
+func (s *stringValue) Set(v string) error {
+	*s.dst = v
+	return nil
+}
+
+// --- internal helpers ---
+
+func parseForwardHeaders(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var headers []string
+	for _, h := range strings.Split(raw, ",") {
+		if norm := strings.TrimSpace(h); norm != "" {
+			headers = append(headers, norm)
+		}
+	}
+	return headers
+}
+
+func parseOrigins(raw string) []*url.URL {
+	if raw == "" {
+		return nil
+	}
+	var urls []*url.URL
+	for _, origin := range strings.Split(raw, ",") {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			continue
+		}
+		u, err := url.Parse(origin)
+		if err != nil {
+			continue
+		}
+		if u.Path != "" {
+			last := u.Path[len(u.Path)-1:]
+			if last == "*" {
+				u.Path = strings.TrimSuffix(u.Path, "*")
+			} else if last != "/" {
+				u.Path += "/"
+			}
+		}
+		urls = append(urls, u)
+	}
+	return urls
+}
+
+func parseInt(s string) (int, error) {
+	if s == "" {
+		return 0, nil
+	}
+	var v int
+	_, err := fmt.Sscanf(s, "%d", &v)
+	return v, err
+}
