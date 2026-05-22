@@ -14,7 +14,7 @@ func NewProvider(ctx context.Context, o config.StorageOptions) (source.ObjectSto
 	switch strings.ToLower(strings.TrimSpace(o.Type)) {
 	case "":
 		return nil, nil
-	case "s3":
+	case "s3-compatible":
 		return NewS3Provider(ctx, o)
 	default:
 		return nil, fmt.Errorf("unsupported storage type: %s", o.Type)

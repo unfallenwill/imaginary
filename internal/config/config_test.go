@@ -207,7 +207,7 @@ func TestLoadStorage(t *testing.T) {
 	t.Setenv("TEST_STORAGE_SECRET", "secret")
 	if err := os.WriteFile(configFile, []byte(`{
 		"storage": {
-			"type": "s3",
+			"type": "s3-compatible",
 			"bucket": "images",
 			"region": "us-east-1"
 		}
@@ -222,8 +222,8 @@ func TestLoadStorage(t *testing.T) {
 	if err := cfg.LoadStorage(); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Storage.Type != "s3" {
-		t.Fatalf("expected s3, got %s", cfg.Storage.Type)
+	if cfg.Storage.Type != "s3-compatible" {
+		t.Fatalf("expected s3-compatible, got %s", cfg.Storage.Type)
 	}
 	if cfg.Storage.Bucket != "images" {
 		t.Fatalf("expected images, got %s", cfg.Storage.Bucket)

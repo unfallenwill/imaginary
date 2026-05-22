@@ -13,7 +13,7 @@ func TestLoadFileStorageOptions(t *testing.T) {
 	t.Setenv("TEST_STORAGE_SECRET", "secret")
 	err := os.WriteFile(configFile, []byte(`{
 		"storage": {
-			"type": "s3",
+			"type": "s3-compatible",
 			"bucket": "images",
 			"region": "ap-shanghai",
 			"endpoint": "https://cos.ap-shanghai.myqcloud.com",
@@ -32,7 +32,7 @@ func TestLoadFileStorageOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if options.Storage.Type != "s3" {
+	if options.Storage.Type != "s3-compatible" {
 		t.Fatalf("Invalid storage type: %s", options.Storage.Type)
 	}
 	if options.Storage.SecretKey != "secret" {

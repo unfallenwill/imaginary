@@ -903,7 +903,7 @@ Configure an S3-compatible storage provider with a JSON config file:
 ```json
 {
   "storage": {
-    "type": "s3",
+    "type": "s3-compatible",
     "bucket": "your-bucket",
     "region": "ap-shanghai",
     "endpoint": "https://cos.ap-shanghai.myqcloud.com",
