@@ -741,6 +741,7 @@ Resize an image by width or height. Image aspect ratio is maintained
 - type `string`
 - file `string` - Only GET method and if the `-mount` flag is present
 - url `string` - Only GET method and if the `-enable-url-source` flag is present
+- object `string` - Only GET method and if object storage is configured via `-config`
 - embed `bool`
 - force `bool`
 - rotate `int`
@@ -918,6 +919,13 @@ Start imaginary with the config file:
 
 ```bash
 imaginary -config ./imaginary.json
+```
+
+The configured object storage can also be used with existing image APIs via the `object`
+query parameter:
+
+```bash
+curl -o image.webp 'http://localhost:9000/thumbnail?object=uploads/2026/05/image.jpg&width=720&height=405&type=webp&embed=true'
 ```
 
 #### GET | POST /fit

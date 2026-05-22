@@ -22,6 +22,7 @@ import (
 	_ "github.com/h2non/imaginary/internal/source/body"
 	_ "github.com/h2non/imaginary/internal/source/fs"
 	_ "github.com/h2non/imaginary/internal/source/http"
+	_ "github.com/h2non/imaginary/internal/source/object"
 )
 
 type fakeObjectStorage struct {
@@ -535,6 +536,45 @@ func TestPathThumbnailDisabledEndpoint(t *testing.T) {
 	}
 	if res.StatusCode != 501 {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+}
+
+func TestObjectStorageSource(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	opts := config.ServerOptions{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    fakeObjectStorage{body: buf},
+	}
+	fn := ImageMiddleware(opts)(img.Thumbnail)
+	source.LoadSources(opts)
+
+	ts := httptest.NewServer(fn)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "?width=300&height=200&type=webp&object=uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+
+	image, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(image) == 0 {
+		t.Fatalf("Empty response body")
+	}
+
+	err = assertSize(image, 300, 200)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bimg.DetermineImageTypeName(image) != "webp" {
+		t.Fatalf("Invalid image type")
 	}
 }
 
