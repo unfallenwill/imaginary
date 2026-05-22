@@ -73,7 +73,7 @@ type FileOptions struct {
 func LoadFile(filename string) (FileOptions, error) {
 	var options FileOptions
 
-	buf, err := os.ReadFile(filename)
+	buf, err := os.ReadFile(filename) // #nosec G304 -- config path is explicitly provided by the server operator.
 	if err != nil {
 		return options, err
 	}
