@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,18 @@ import (
 	_ "github.com/h2non/imaginary/internal/source/fs"
 	_ "github.com/h2non/imaginary/internal/source/http"
 )
+
+type fakeObjectStorage struct {
+	body []byte
+	err  error
+}
+
+func (s fakeObjectStorage) Open(ctx context.Context, key string) (io.ReadCloser, int64, error) {
+	if s.err != nil {
+		return nil, 0, s.err
+	}
+	return io.NopCloser(bytes.NewReader(s.body)), int64(len(s.body)), nil
+}
 
 func TestIndex(t *testing.T) {
 	opts := config.ServerOptions{PathPrefix: "/", MaxAllowedPixels: 18.0}
@@ -412,6 +425,79 @@ func TestMountInvalidPath(t *testing.T) {
 
 	if res.StatusCode != 400 {
 		t.Fatalf("Invalid response status: %s", res.Status)
+	}
+}
+
+func TestPathThumbnailObjectStorage(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	opts := config.ServerOptions{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    fakeObjectStorage{body: buf},
+	}
+
+	ts := httptest.NewServer(NewServerMux(opts))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/300x200q85/uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+
+	image, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(image) == 0 {
+		t.Fatalf("Empty response body")
+	}
+
+	err = assertSize(image, 300, 200)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPathThumbnailInvalidSpec(t *testing.T) {
+	opts := config.ServerOptions{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    fakeObjectStorage{body: []byte("image")},
+	}
+
+	ts := httptest.NewServer(NewServerMux(opts))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/300x0q85/uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 400 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+}
+
+func TestPathThumbnailDisabledEndpoint(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	opts := config.ServerOptions{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    fakeObjectStorage{body: buf},
+		Endpoints:        config.Endpoints{"thumbnail"},
+	}
+
+	ts := httptest.NewServer(NewServerMux(opts))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/300x200/uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 501 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 }
 

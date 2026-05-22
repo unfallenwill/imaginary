@@ -80,6 +80,11 @@ func NewServerMux(o config.ServerOptions) http.Handler {
 	mux.Handle(join(o, "/flip"), image(img.Flip))
 	mux.Handle(join(o, "/flop"), image(img.Flop))
 	mux.Handle(join(o, "/thumbnail"), image(img.Thumbnail))
+	pathThumbnail := Middleware(pathThumbnailController(o), o)
+	if o.EnableURLSignature {
+		pathThumbnail = validateURLSignature(pathThumbnail, o)
+	}
+	mux.Handle(thumbnailPathPattern(o), pathThumbnail)
 	mux.Handle(join(o, "/zoom"), image(img.Zoom))
 	mux.Handle(join(o, "/convert"), image(img.Convert))
 	mux.Handle(join(o, "/watermark"), image(img.Watermark))

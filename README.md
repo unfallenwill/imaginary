@@ -359,6 +359,7 @@ Options:
                             (default for current machine is 8 cores)
   -log-level                Set log level for http-server. E.g: info,warning,error [default: info].
                             Or can use the environment variable GOLANG_LOG=info.
+  -config <path>            JSON config file path.
 ```
 
 Start the server in a custom port:
@@ -884,6 +885,40 @@ Accepts: `image/*, multipart/form-data`. Content-Type: `image/*`
 - interlace `bool`
 - aspectratio `string`
 - palette `bool`
+
+#### GET /thumbnail/{width}x{height}[q{quality}]/{objectKey}
+
+Reads the original image from the configured object storage provider and returns a thumbnail.
+This path style is useful for object storage or CDN origin fallback.
+
+Example:
+
+```bash
+curl -o image.jpg 'http://localhost:9000/thumbnail/720x405q80/uploads/2026/05/image.jpg'
+```
+
+Configure an S3-compatible storage provider with a JSON config file:
+
+```json
+{
+  "storage": {
+    "type": "s3",
+    "bucket": "your-bucket",
+    "region": "ap-shanghai",
+    "endpoint": "https://cos.ap-shanghai.myqcloud.com",
+    "access_key": "${ACCESS_KEY}",
+    "secret_key": "${SECRET_KEY}",
+    "force_path_style": false,
+    "key_prefix": ""
+  }
+}
+```
+
+Start imaginary with the config file:
+
+```bash
+imaginary -config ./imaginary.json
+```
 
 #### GET | POST /fit
 Accepts: `image/*, multipart/form-data`. Content-Type: `image/*`
