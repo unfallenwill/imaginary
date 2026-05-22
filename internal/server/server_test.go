@@ -461,6 +461,43 @@ func TestPathThumbnailObjectStorage(t *testing.T) {
 	}
 }
 
+func TestPathThumbnailObjectStorageWithType(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	opts := config.ServerOptions{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    fakeObjectStorage{body: buf},
+	}
+
+	ts := httptest.NewServer(NewServerMux(opts))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/300x200q85.webp/uploads/2026/05/image.jpg?embed=true")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+
+	image, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(image) == 0 {
+		t.Fatalf("Empty response body")
+	}
+
+	err = assertSize(image, 300, 200)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bimg.DetermineImageTypeName(image) != "webp" {
+		t.Fatalf("Invalid image type")
+	}
+}
+
 func TestPathThumbnailInvalidSpec(t *testing.T) {
 	opts := config.ServerOptions{
 		PathPrefix:       "/",

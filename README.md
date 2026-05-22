@@ -886,7 +886,7 @@ Accepts: `image/*, multipart/form-data`. Content-Type: `image/*`
 - aspectratio `string`
 - palette `bool`
 
-#### GET /thumbnail/{width}x{height}[q{quality}]/{objectKey}
+#### GET /thumbnail/{width}x{height}[q{quality}][.{type}]/{objectKey}
 
 Reads the original image from the configured object storage provider and returns a thumbnail.
 This path style is useful for object storage or CDN origin fallback.
@@ -894,7 +894,7 @@ This path style is useful for object storage or CDN origin fallback.
 Example:
 
 ```bash
-curl -o image.jpg 'http://localhost:9000/thumbnail/720x405q80/uploads/2026/05/image.jpg'
+curl -o image.webp 'http://localhost:9000/thumbnail/720x405q80.webp/uploads/2026/05/image.jpg?embed=true'
 ```
 
 Configure an S3-compatible storage provider with a JSON config file:
