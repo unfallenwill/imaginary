@@ -68,36 +68,36 @@ func derefBool(p *bool, defaultVal bool) bool {
 // deserialized directly from JSON. Pointer fields distinguish "not provided" from
 // "provided as zero/empty".
 type PipelineParams struct {
-	Width       *int    `json:"width"`
-	Height      *int    `json:"height"`
-	Top         *int    `json:"top"`
-	Left        *int    `json:"left"`
-	AreaWidth   *int    `json:"areawidth"`
-	AreaHeight  *int    `json:"areaheight"`
-	Quality     *int    `json:"quality"`
-	Compression *int    `json:"compression"`
-	Rotate      *int    `json:"rotate"`
-	Margin      *int    `json:"margin"`
-	Factor      *int    `json:"factor"`
-	DPI         *int    `json:"dpi"`
-	TextWidth   *int    `json:"textwidth"`
-	Speed       *int    `json:"speed"`
+	Width       *int `json:"width"`
+	Height      *int `json:"height"`
+	Top         *int `json:"top"`
+	Left        *int `json:"left"`
+	AreaWidth   *int `json:"areawidth"`
+	AreaHeight  *int `json:"areaheight"`
+	Quality     *int `json:"quality"`
+	Compression *int `json:"compression"`
+	Rotate      *int `json:"rotate"`
+	Margin      *int `json:"margin"`
+	Factor      *int `json:"factor"`
+	DPI         *int `json:"dpi"`
+	TextWidth   *int `json:"textwidth"`
+	Speed       *int `json:"speed"`
 
 	Opacity *float64 `json:"opacity"`
 	Sigma   *float64 `json:"sigma"`
 	MinAmpl *float64 `json:"minampl"`
 
-	Flip          *bool   `json:"flip"`
-	Flop          *bool   `json:"flop"`
-	NoCrop        *bool   `json:"nocrop"`
-	NoProfile     *bool   `json:"noprofile"`
-	NoRotation    *bool   `json:"norotation"`
-	NoReplicate   *bool   `json:"noreplicate"`
-	Force         *bool   `json:"force"`
-	Embed         *bool   `json:"embed"`
-	StripMeta     *bool   `json:"stripmeta"`
-	Interlace     *bool   `json:"interlace"`
-	Palette       *bool   `json:"palette"`
+	Flip        *bool `json:"flip"`
+	Flop        *bool `json:"flop"`
+	NoCrop      *bool `json:"nocrop"`
+	NoProfile   *bool `json:"noprofile"`
+	NoRotation  *bool `json:"norotation"`
+	NoReplicate *bool `json:"noreplicate"`
+	Force       *bool `json:"force"`
+	Embed       *bool `json:"embed"`
+	StripMeta   *bool `json:"stripmeta"`
+	Interlace   *bool `json:"interlace"`
+	Palette     *bool `json:"palette"`
 
 	Text        string `json:"text"`
 	Image       string `json:"image"`
