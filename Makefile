@@ -3,13 +3,13 @@ NO_COLOR=\033[0m
 
 build:
 	@echo "$(OK_COLOR)==> Compiling binary$(NO_COLOR)"
-	go test && go build -o bin/imaginary
+	go test ./... && go build -o bin/imaginary ./cmd/imaginary
 
 test:
-	go test
+	go test ./...
 
 install:
-	go get -u .
+	go install ./cmd/imaginary
 
 benchmark: build
 	bash benchmark.sh

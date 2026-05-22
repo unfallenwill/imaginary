@@ -36,7 +36,7 @@ RUN DEBIAN_FRONTEND=noninteractive \
 WORKDIR /tmp
 RUN curl -fsSL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "${GOPATH}/bin" v${GOLANGCILINT_VERSION}
 
-WORKDIR ${GOPATH}/src/github.com/h2non/imaginary
+WORKDIR /app
 
 # Cache go modules
 ENV GO111MODULE=on
@@ -50,14 +50,14 @@ RUN go mod download
 COPY . .
 
 # Run quality control
-RUN go test ./... -test.v -race -test.coverprofile=atomic .
-RUN golangci-lint run .
+RUN go test ./... -test.v -race -test.coverprofile=atomic
+RUN golangci-lint run ./...
 
 # Compile imaginary
 RUN go build -a \
     -o ${GOPATH}/bin/imaginary \
-    -ldflags="-s -w -h -X main.Version=${IMAGINARY_VERSION}" \
-    github.com/h2non/imaginary
+    -ldflags="-s -w -h -X github.com/h2non/imaginary/internal/version.Version=${IMAGINARY_VERSION}" \
+    ./cmd/imaginary
 
 FROM debian:bullseye-slim
 
