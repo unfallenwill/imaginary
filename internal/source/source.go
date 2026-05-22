@@ -1,11 +1,17 @@
 package source
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"net/url"
-
-	"github.com/h2non/imaginary/internal/config"
 )
+
+// ObjectStorage represents a configured object storage backend.
+// Defined here at the consumer, following Go's "define interfaces where they're used" principle.
+type ObjectStorage interface {
+	Open(ctx context.Context, key string) (io.ReadCloser, int64, error)
+}
 
 type ImageSourceType string
 type ImageSourceFactoryFunction func(*SourceConfig) ImageSource
@@ -18,7 +24,7 @@ type SourceConfig struct {
 	ForwardHeaders []string
 	AllowedOrigins []*url.URL
 	MaxAllowedSize int
-	ObjectStorage  config.ObjectStorage
+	ObjectStorage  ObjectStorage
 }
 
 type ImageSource interface {
@@ -47,18 +53,4 @@ func (r *Resolver) Match(req *http.Request) ImageSource {
 		}
 	}
 	return nil
-}
-
-// NewSourceConfig creates a source config from server options.
-func NewSourceConfig(o config.ServerOptions, sourceType ImageSourceType) *SourceConfig {
-	return &SourceConfig{
-		Type:           sourceType,
-		MountPath:      o.Mount,
-		AuthForwarding: o.AuthForwarding,
-		Authorization:  o.Authorization,
-		AllowedOrigins: o.AllowedOrigins,
-		MaxAllowedSize: o.MaxAllowedSize,
-		ForwardHeaders: o.ForwardHeaders,
-		ObjectStorage:  o.ObjectStorage,
-	}
 }

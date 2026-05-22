@@ -14,53 +14,52 @@ import (
 	"github.com/throttled/throttled/v2"
 	"github.com/throttled/throttled/v2/store/memstore"
 
-	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )
 
-func Middleware(fn func(http.ResponseWriter, *http.Request), o config.ServerOptions) http.Handler {
+func Middleware(fn func(http.ResponseWriter, *http.Request), cfg Config) http.Handler {
 	next := http.Handler(http.HandlerFunc(fn))
 
-	if len(o.Endpoints) > 0 {
-		next = filterEndpoint(next, o)
+	if len(cfg.Endpoints) > 0 {
+		next = filterEndpoint(next, cfg)
 	}
-	if o.Concurrency > 0 {
-		next = throttle(next, o)
+	if cfg.Concurrency > 0 {
+		next = throttle(next, cfg)
 	}
-	if o.CORS {
+	if cfg.CORS {
 		next = cors.Default().Handler(next)
 	}
-	if o.APIKey != "" {
-		next = authorizeClient(next, o)
+	if cfg.APIKey != "" {
+		next = authorizeClient(next, cfg)
 	}
-	if o.HTTPCacheTTL >= 0 {
-		next = setCacheHeaders(next, o.HTTPCacheTTL)
+	if cfg.HTTPCacheTTL >= 0 {
+		next = setCacheHeaders(next, cfg.HTTPCacheTTL)
 	}
 
-	return validate(defaultHeaders(next), o)
+	return validate(defaultHeaders(next), cfg)
 }
 
-func ImageMiddleware(o config.ServerOptions, resolver *source.Resolver) func(img.Operation) http.Handler {
+func ImageMiddleware(cfg Config, resolver *source.Resolver) func(img.Operation) http.Handler {
 	return func(fn img.Operation) http.Handler {
-		handler := validateImage(Middleware(imageController(o, resolver, fn), o), o)
+		handler := validateImage(Middleware(imageController(cfg, resolver, fn), cfg), cfg)
 
-		if o.EnableURLSignature {
-			return validateURLSignature(handler, o)
+		if cfg.EnableURLSignature {
+			return validateURLSignature(handler, cfg)
 		}
 
 		return handler
 	}
 }
 
-func filterEndpoint(next http.Handler, o config.ServerOptions) http.Handler {
+func filterEndpoint(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if o.Endpoints.IsValid(r) {
+		if cfg.Endpoints.IsAllowed(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		img.ErrorReply(r, w, img.ErrNotImplemented, o)
+		ErrorReply(w, r, img.ErrNotImplemented, cfg.Error)
 	})
 }
 
@@ -70,14 +69,14 @@ func throttleError(err error) http.Handler {
 	})
 }
 
-func throttle(next http.Handler, o config.ServerOptions) http.Handler {
+func throttle(next http.Handler, cfg Config) http.Handler {
 	store, err := memstore.New(65536)
 	if err != nil {
 		return throttleError(err)
 	}
 	wrappedStore := throttled.WrapStoreWithContext(store)
 
-	quota := throttled.RateQuota{MaxRate: throttled.PerSec(o.Concurrency), MaxBurst: o.Burst}
+	quota := throttled.RateQuota{MaxRate: throttled.PerSec(cfg.Concurrency), MaxBurst: cfg.Burst}
 	rateLimiter, err := throttled.NewGCRARateLimiterCtx(wrappedStore, quota)
 	if err != nil {
 		return throttleError(err)
@@ -91,10 +90,10 @@ func throttle(next http.Handler, o config.ServerOptions) http.Handler {
 	return httpRateLimiter.RateLimit(next)
 }
 
-func validate(next http.Handler, o config.ServerOptions) http.Handler {
+func validate(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			img.ErrorReply(r, w, img.ErrMethodNotAllowed, o)
+			ErrorReply(w, r, img.ErrMethodNotAllowed, cfg.Error)
 			return
 		}
 
@@ -102,16 +101,16 @@ func validate(next http.Handler, o config.ServerOptions) http.Handler {
 	})
 }
 
-func validateImage(next http.Handler, o config.ServerOptions) http.Handler {
+func validateImage(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if r.Method == http.MethodGet && isPublicPath(path) {
+		reqPath := r.URL.Path
+		if r.Method == http.MethodGet && isPublicPath(reqPath) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		if r.Method == http.MethodGet && o.Mount == "" && !o.EnableURLSource {
-			img.ErrorReply(r, w, img.ErrGetMethodNotAllowed, o)
+		if r.Method == http.MethodGet && cfg.Mount == "" && !cfg.EnableURLSource {
+			ErrorReply(w, r, img.ErrGetMethodNotAllowed, cfg.Error)
 			return
 		}
 
@@ -119,15 +118,15 @@ func validateImage(next http.Handler, o config.ServerOptions) http.Handler {
 	})
 }
 
-func authorizeClient(next http.Handler, o config.ServerOptions) http.Handler {
+func authorizeClient(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := r.Header.Get("API-Key")
 		if key == "" {
 			key = r.URL.Query().Get("key")
 		}
 
-		if key != o.APIKey {
-			img.ErrorReply(r, w, img.ErrInvalidAPIKey, o)
+		if key != cfg.APIKey {
+			ErrorReply(w, r, img.ErrInvalidAPIKey, cfg.Error)
 			return
 		}
 
@@ -165,29 +164,29 @@ func getCacheControl(ttl int) string {
 	return fmt.Sprintf("public, s-maxage=%d, max-age=%d, no-transform", ttl, ttl)
 }
 
-func isPublicPath(path string) bool {
-	return path == "/" || path == "/health" || path == "/form"
+func isPublicPath(requestPath string) bool {
+	return requestPath == "/" || requestPath == "/health" || requestPath == "/form"
 }
 
-func validateURLSignature(next http.Handler, o config.ServerOptions) http.Handler {
+func validateURLSignature(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		query := r.URL.Query()
 		sign := query.Get("sign")
 		query.Del("sign")
 
-		h := hmac.New(sha256.New, []byte(o.URLSignatureKey))
+		h := hmac.New(sha256.New, []byte(cfg.URLSignatureKey))
 		_, _ = h.Write([]byte(r.URL.Path))
 		_, _ = h.Write([]byte(query.Encode()))
 		expectedSign := h.Sum(nil)
 
 		urlSign, err := base64.RawURLEncoding.DecodeString(sign)
 		if err != nil {
-			img.ErrorReply(r, w, img.ErrInvalidURLSignature, o)
+			ErrorReply(w, r, img.ErrInvalidURLSignature, cfg.Error)
 			return
 		}
 
 		if !hmac.Equal(urlSign, expectedSign) {
-			img.ErrorReply(r, w, img.ErrURLSignatureMismatch, o)
+			ErrorReply(w, r, img.ErrURLSignatureMismatch, cfg.Error)
 			return
 		}
 

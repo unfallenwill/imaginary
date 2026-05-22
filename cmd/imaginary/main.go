@@ -18,6 +18,11 @@ import (
 	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/server"
+	"github.com/h2non/imaginary/internal/source"
+	bodysource "github.com/h2non/imaginary/internal/source/body"
+	fssource "github.com/h2non/imaginary/internal/source/fs"
+	httpsource "github.com/h2non/imaginary/internal/source/http"
+	objectsource "github.com/h2non/imaginary/internal/source/object"
 	"github.com/h2non/imaginary/internal/storage"
 	"github.com/h2non/imaginary/internal/version"
 )
@@ -120,10 +125,6 @@ Options:
   -config <path>             JSON config file path.
 `
 
-type URLSignature struct {
-	Key string
-}
-
 func main() {
 	flag.Usage = func() {
 		_, _ = fmt.Fprintf(os.Stderr, usage, version.Version, runtime.NumCPU())
@@ -141,44 +142,17 @@ func main() {
 	runtime.GOMAXPROCS(*aCpus)
 
 	port := getPort(*aPort)
-	urlSignature := getURLSignature(*aURLSignatureKey)
+	urlSignatureKey := getURLSignatureKey()
+	maxAllowedSize := *aMaxAllowedSize
 
-	opts := config.ServerOptions{
-		Port:               port,
-		Address:            *aAddr,
-		CORS:               *aCors,
-		AuthForwarding:     *aAuthForwarding,
-		EnableURLSource:    *aEnableURLSource,
-		EnablePlaceholder:  *aEnablePlaceholder,
-		EnableURLSignature: *aEnableURLSignature,
-		URLSignatureKey:    urlSignature.Key,
-		PathPrefix:         *aPathPrefix,
-		APIKey:             *aKey,
-		Concurrency:        *aConcurrency,
-		Burst:              *aBurst,
-		Mount:              *aMount,
-		CertFile:           *aCertFile,
-		KeyFile:            *aKeyFile,
-		Placeholder:        *aPlaceholder,
-		PlaceholderStatus:  *aPlaceholderStatus,
-		HTTPCacheTTL:       *aHTTPCacheTTL,
-		HTTPReadTimeout:    *aReadTimeout,
-		HTTPWriteTimeout:   *aWriteTimeout,
-		Authorization:      *aAuthorization,
-		ForwardHeaders:     parseForwardHeaders(*aForwardHeaders),
-		AllowedOrigins:     parseOrigins(*aAllowedOrigins),
-		MaxAllowedSize:     *aMaxAllowedSize,
-		MaxAllowedPixels:   *aMaxAllowedPixels,
-		LogLevel:           getLogLevel(*aLogLevel),
-		ReturnSize:         *aReturnSize,
-	}
-
+	// Resolve storage configuration
+	var storageOpts config.StorageOptions
 	if *aConfig != "" {
 		fileOptions, err := config.LoadFile(*aConfig)
 		if err != nil {
 			exitWithError("cannot load config file: %s", err)
 		}
-		opts.Storage = fileOptions.Storage
+		storageOpts = fileOptions.Storage
 	}
 
 	// Show warning if gzip flag is passed
@@ -201,12 +175,15 @@ func main() {
 		checkHTTPCacheTTL(*aHTTPCacheTTL)
 	}
 
-	// Parse endpoint names to disabled, if present
+	// Parse disabled endpoints
+	var endpoints server.EndpointSet
 	if *aDisableEndpoints != "" {
-		opts.Endpoints = parseEndpoints(*aDisableEndpoints)
+		endpoints = parseEndpoints(*aDisableEndpoints)
 	}
 
-	// Read placeholder image, if required
+	// Resolve placeholder image
+	var placeholderImage []byte
+	placeholderEnabled := false
 	if *aPlaceholder != "" {
 		buf, err := os.ReadFile(*aPlaceholder)
 		if err != nil {
@@ -218,35 +195,96 @@ func main() {
 			exitWithError("Placeholder image type is not supported. Only JPEG, PNG or WEBP are supported")
 		}
 
-		opts.PlaceholderImage = buf
+		placeholderImage = buf
+		placeholderEnabled = true
 	} else if *aEnablePlaceholder {
-		// Expose default placeholder
-		opts.PlaceholderImage = img.Placeholder
+		placeholderImage = img.Placeholder
+		placeholderEnabled = true
 	}
 
 	// Check URL signature key, if required
 	if *aEnableURLSignature {
-		if urlSignature.Key == "" {
+		if urlSignatureKey == "" {
 			exitWithError("URL signature key is required")
 		}
 
-		if len(urlSignature.Key) < 32 {
+		if len(urlSignatureKey) < 32 {
 			exitWithError("URL signature key must be a minimum of 32 characters")
 		}
 	}
 
-	if opts.Storage.Type != "" {
-		objectStorage, err := storage.NewProvider(context.Background(), opts.Storage)
+	// Resolve object storage
+	var objectStorage source.ObjectStorage
+	if storageOpts.Type != "" {
+		var err error
+		objectStorage, err = storage.NewProvider(context.Background(), storageOpts)
 		if err != nil {
 			exitWithError("cannot configure object storage: %s", err)
 		}
-		opts.ObjectStorage = objectStorage
 	}
 
-	debug("imaginary server listening on port :%d/%s", opts.Port, strings.TrimPrefix(opts.PathPrefix, "/"))
+	// Build source resolver
+	resolver := source.NewResolver(
+		bodysource.NewBodyImageSource(&source.SourceConfig{
+			Type:           bodysource.ImageSourceTypeBody,
+			ObjectStorage:  objectStorage,
+			MaxAllowedSize: maxAllowedSize,
+		}),
+		objectsource.NewObjectImageSource(&source.SourceConfig{
+			Type:           objectsource.ImageSourceTypeObject,
+			ObjectStorage:  objectStorage,
+			MaxAllowedSize: maxAllowedSize,
+		}),
+		fssource.NewFileSystemImageSource(&source.SourceConfig{
+			Type:      fssource.ImageSourceTypeFileSystem,
+			MountPath: *aMount,
+		}),
+		httpsource.NewHTTPImageSource(&source.SourceConfig{
+			Type:           httpsource.ImageSourceTypeHTTP,
+			AuthForwarding: *aAuthForwarding,
+			Authorization:  *aAuthorization,
+			ForwardHeaders: parseForwardHeaders(*aForwardHeaders),
+			AllowedOrigins: parseOrigins(*aAllowedOrigins),
+			MaxAllowedSize: maxAllowedSize,
+		}),
+	)
+
+	// Build server config
+	cfg := server.Config{
+		Addr:              *aAddr,
+		Port:              port,
+		HTTPReadTimeout:   *aReadTimeout,
+		HTTPWriteTimeout:  *aWriteTimeout,
+		CertFile:          *aCertFile,
+		KeyFile:           *aKeyFile,
+		LogLevel:          getLogLevel(*aLogLevel),
+		PathPrefix:        *aPathPrefix,
+		CORS:              *aCors,
+		APIKey:            *aKey,
+		Concurrency:       *aConcurrency,
+		Burst:             *aBurst,
+		HTTPCacheTTL:      *aHTTPCacheTTL,
+		EnableURLSource:   *aEnableURLSource,
+		Mount:             *aMount,
+		EnableURLSignature: *aEnableURLSignature,
+		URLSignatureKey:   urlSignatureKey,
+		Endpoints:         endpoints,
+		MaxAllowedPixels:  *aMaxAllowedPixels,
+		MaxAllowedSize:    maxAllowedSize,
+		ReturnSize:        *aReturnSize,
+		Error: server.ErrorConfig{
+			PlaceholderEnabled: placeholderEnabled,
+			PlaceholderImage:   placeholderImage,
+			PlaceholderStatus:  *aPlaceholderStatus,
+		},
+		ObjectStorage: objectStorage,
+		Resolver:      resolver,
+	}
+
+	debug("imaginary server listening on port :%d/%s", cfg.Port, strings.TrimPrefix(cfg.PathPrefix, "/"))
 
 	// Start the server
-	server.Server(opts)
+	server.Server(cfg)
 }
 
 func getPort(port int) int {
@@ -259,12 +297,12 @@ func getPort(port int) int {
 	return port
 }
 
-func getURLSignature(key string) URLSignature {
+func getURLSignatureKey() string {
+	key := *aURLSignatureKey
 	if keyEnv := os.Getenv("URL_SIGNATURE_KEY"); keyEnv != "" {
 		key = keyEnv
 	}
-
-	return URLSignature{key}
+	return key
 }
 
 func getLogLevel(logLevel string) string {
@@ -346,8 +384,8 @@ func parseOrigins(origins string) []*url.URL {
 	return urls
 }
 
-func parseEndpoints(input string) config.Endpoints {
-	var endpoints config.Endpoints
+func parseEndpoints(input string) server.EndpointSet {
+	var endpoints server.EndpointSet
 	for _, endpoint := range strings.Split(input, ",") {
 		endpoint = strings.ToLower(strings.TrimSpace(endpoint))
 		if endpoint != "" {

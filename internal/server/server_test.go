@@ -14,8 +14,12 @@ import (
 
 	"github.com/h2non/bimg"
 
-	"github.com/h2non/imaginary/internal/config"
-	img "github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/source"
+	bodysource "github.com/h2non/imaginary/internal/source/body"
+	fssource "github.com/h2non/imaginary/internal/source/fs"
+	httpsource "github.com/h2non/imaginary/internal/source/http"
+	objectsource "github.com/h2non/imaginary/internal/source/object"
 )
 
 type fakeObjectStorage struct {
@@ -31,8 +35,8 @@ func (s fakeObjectStorage) Open(ctx context.Context, key string) (io.ReadCloser,
 }
 
 func TestIndex(t *testing.T) {
-	opts := config.ServerOptions{PathPrefix: "/", MaxAllowedPixels: 18.0}
-	ts := testServer(indexController(opts))
+	cfg := Config{PathPrefix: "/", MaxAllowedPixels: 18.0}
+	ts := testServer(indexController(cfg.PathPrefix, cfg.Error))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL)
@@ -55,7 +59,7 @@ func TestIndex(t *testing.T) {
 }
 
 func TestCrop(t *testing.T) {
-	ts := testServer(controller(img.Crop))
+	ts := testServer(controller(image.Crop))
 	buf := readFile("large.jpg")
 	url := ts.URL + "?width=300"
 	defer ts.Close()
@@ -73,26 +77,26 @@ func TestCrop(t *testing.T) {
 		t.Fatal("Empty content length response")
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 1080)
+	err = assertSize(img, 300, 1080)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestResize(t *testing.T) {
-	ts := testServer(controller(img.Resize))
+	ts := testServer(controller(image.Resize))
 	buf := readFile("large.jpg")
 	url := ts.URL + "?width=300&nocrop=false"
 	defer ts.Close()
@@ -106,26 +110,26 @@ func TestResize(t *testing.T) {
 		t.Fatalf("Invalid response status: %s", res.Status)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 1080)
+	err = assertSize(img, 300, 1080)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestEnlarge(t *testing.T) {
-	ts := testServer(controller(img.Enlarge))
+	ts := testServer(controller(image.Enlarge))
 	buf := readFile("large.jpg")
 	url := ts.URL + "?width=300&height=200&nocrop=false"
 	defer ts.Close()
@@ -139,26 +143,26 @@ func TestEnlarge(t *testing.T) {
 		t.Fatalf("Invalid response status: %s", res.Status)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 200)
+	err = assertSize(img, 300, 200)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestExtract(t *testing.T) {
-	ts := testServer(controller(img.Extract))
+	ts := testServer(controller(image.Extract))
 	buf := readFile("large.jpg")
 	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120"
 	defer ts.Close()
@@ -172,20 +176,20 @@ func TestExtract(t *testing.T) {
 		t.Fatalf("Invalid response status: %s", res.Status)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 200, 120)
+	err = assertSize(img, 200, 120)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
@@ -203,7 +207,7 @@ func TestTypeAuto(t *testing.T) {
 	}
 
 	for _, test := range cases {
-		ts := testServer(controller(img.Crop))
+		ts := testServer(controller(image.Crop))
 		buf := readFile("large.jpg")
 		url := ts.URL + "?width=300&type=auto"
 		defer ts.Close()
@@ -224,20 +228,20 @@ func TestTypeAuto(t *testing.T) {
 			t.Fatal("Empty content length response")
 		}
 
-		image, err := io.ReadAll(res.Body)
+		img, err := io.ReadAll(res.Body)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(image) == 0 {
+		if len(img) == 0 {
 			t.Fatalf("Empty response body")
 		}
 
-		err = assertSize(image, 300, 1080)
+		err = assertSize(img, 300, 1080)
 		if err != nil {
 			t.Error(err)
 		}
 
-		if bimg.DetermineImageTypeName(image) != test.expected {
+		if bimg.DetermineImageTypeName(img) != test.expected {
 			t.Fatalf("Invalid image type")
 		}
 
@@ -257,7 +261,7 @@ func TestFit(t *testing.T) {
 		t.Errorf("Reference image expecations weren't met")
 	}
 
-	ts := testServer(controller(img.Fit))
+	ts := testServer(controller(image.Fit))
 	url := ts.URL + "?width=300&height=300"
 	defer ts.Close()
 
@@ -270,32 +274,43 @@ func TestFit(t *testing.T) {
 		t.Fatalf("Invalid response status: %s", res.Status)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
 	// The reference image has a ratio of 1.778, this should produce a height of 168.75
-	err = assertSize(image, 300, 169)
+	err = assertSize(img, 300, 169)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestRemoteHTTPSource(t *testing.T) {
-	opts := config.ServerOptions{EnableURLSource: true, MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
+	cfg := Config{
+		EnableURLSource:   true,
+		MaxAllowedPixels:  18.0,
+		MaxAllowedSize:    0,
+		PathPrefix:        "/",
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
 
 	tsImage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-		_, _ = w.Write(buf)
+		b, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+		_, _ = w.Write(b)
 	}))
 	defer tsImage.Close()
 
@@ -311,27 +326,37 @@ func TestRemoteHTTPSource(t *testing.T) {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 200, 200)
+	err = assertSize(img, 200, 200)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestInvalidRemoteHTTPSource(t *testing.T) {
-	opts := config.ServerOptions{EnableURLSource: true, MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
+	cfg := Config{
+		EnableURLSource:   true,
+		MaxAllowedPixels:  18.0,
+		PathPrefix:        "/",
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
 
 	tsImage := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(400)
@@ -352,8 +377,21 @@ func TestInvalidRemoteHTTPSource(t *testing.T) {
 }
 
 func TestMountDirectory(t *testing.T) {
-	opts := config.ServerOptions{Mount: "../../testdata", MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
+	cfg := Config{
+		Mount:            "../../testdata",
+		MaxAllowedPixels: 18.0,
+		PathPrefix:       "/",
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{
+				Type:      fssource.ImageSourceTypeFileSystem,
+				MountPath: "../../testdata",
+			}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
 
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?width=200&height=200&file=large.jpg"
@@ -367,27 +405,40 @@ func TestMountDirectory(t *testing.T) {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 200, 200)
+	err = assertSize(img, 200, 200)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "jpeg" {
+	if bimg.DetermineImageTypeName(img) != "jpeg" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestMountInvalidDirectory(t *testing.T) {
-	opts := config.ServerOptions{Mount: "_invalid_", MaxAllowedPixels: 18.0}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
+	cfg := Config{
+		Mount:            "_invalid_",
+		MaxAllowedPixels: 18.0,
+		PathPrefix:       "/",
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{
+				Type:      fssource.ImageSourceTypeFileSystem,
+				MountPath: "_invalid_",
+			}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120&file=large.jpg"
 	defer ts.Close()
@@ -403,8 +454,20 @@ func TestMountInvalidDirectory(t *testing.T) {
 }
 
 func TestMountInvalidPath(t *testing.T) {
-	opts := config.ServerOptions{Mount: "_invalid_"}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Crop)
+	cfg := Config{
+		Mount:       "_invalid_",
+		PathPrefix:  "/",
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{
+				Type:      fssource.ImageSourceTypeFileSystem,
+				MountPath: "_invalid_",
+			}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
 	ts := httptest.NewServer(fn)
 	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120&file=../../large.jpg"
 	defer ts.Close()
@@ -421,13 +484,13 @@ func TestMountInvalidPath(t *testing.T) {
 
 func TestPathThumbnailObjectStorage(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	opts := config.ServerOptions{
+	cfg := Config{
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
 	}
 
-	ts := httptest.NewServer(NewServerMux(opts))
+	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/thumbnail/300x200q85/uploads/2026/05/image.jpg")
@@ -438,15 +501,15 @@ func TestPathThumbnailObjectStorage(t *testing.T) {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 200)
+	err = assertSize(img, 300, 200)
 	if err != nil {
 		t.Error(err)
 	}
@@ -454,13 +517,13 @@ func TestPathThumbnailObjectStorage(t *testing.T) {
 
 func TestPathThumbnailObjectStorageWithType(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	opts := config.ServerOptions{
+	cfg := Config{
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
 	}
 
-	ts := httptest.NewServer(NewServerMux(opts))
+	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/thumbnail/300x200q85.webp/uploads/2026/05/image.jpg?embed=true")
@@ -471,32 +534,32 @@ func TestPathThumbnailObjectStorageWithType(t *testing.T) {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 200)
+	err = assertSize(img, 300, 200)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "webp" {
+	if bimg.DetermineImageTypeName(img) != "webp" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
 func TestPathThumbnailInvalidSpec(t *testing.T) {
-	opts := config.ServerOptions{
+	cfg := Config{
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: []byte("image")},
 	}
 
-	ts := httptest.NewServer(NewServerMux(opts))
+	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/thumbnail/300x0q85/uploads/2026/05/image.jpg")
@@ -510,14 +573,14 @@ func TestPathThumbnailInvalidSpec(t *testing.T) {
 
 func TestPathThumbnailDisabledEndpoint(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	opts := config.ServerOptions{
+	cfg := Config{
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
-		Endpoints:        config.Endpoints{"thumbnail"},
+		Endpoints:        EndpointSet{"thumbnail"},
 	}
 
-	ts := httptest.NewServer(NewServerMux(opts))
+	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/thumbnail/300x200/uploads/2026/05/image.jpg")
@@ -531,12 +594,21 @@ func TestPathThumbnailDisabledEndpoint(t *testing.T) {
 
 func TestObjectStorageSource(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	opts := config.ServerOptions{
+	cfg := Config{
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{
+				Type:          objectsource.ImageSourceTypeObject,
+				ObjectStorage: fakeObjectStorage{body: buf},
+			}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
 	}
-	fn := ImageMiddleware(opts, NewSourceResolver(opts))(img.Thumbnail)
+	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Thumbnail)
 
 	ts := httptest.NewServer(fn)
 	defer ts.Close()
@@ -549,28 +621,29 @@ func TestObjectStorageSource(t *testing.T) {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 
-	image, err := io.ReadAll(res.Body)
+	img, err := io.ReadAll(res.Body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(image) == 0 {
+	if len(img) == 0 {
 		t.Fatalf("Empty response body")
 	}
 
-	err = assertSize(image, 300, 200)
+	err = assertSize(img, 300, 200)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bimg.DetermineImageTypeName(image) != "webp" {
+	if bimg.DetermineImageTypeName(img) != "webp" {
 		t.Fatalf("Invalid image type")
 	}
 }
 
-func controller(op img.Operation) func(w http.ResponseWriter, r *http.Request) {
+func controller(op image.Operation) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		buf, _ := io.ReadAll(r.Body)
-		imageHandler(w, r, buf, op, config.ServerOptions{MaxAllowedPixels: 18.0})
+		cfg := Config{MaxAllowedPixels: 18.0, PathPrefix: "/"}
+		imageHandler(w, r, buf, op, cfg)
 	}
 }
 

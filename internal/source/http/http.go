@@ -48,7 +48,7 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 		}
 		_ = res.Body.Close()
 		if res.StatusCode < 200 && res.StatusCode > 206 {
-			return nil, image.NewError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), res.StatusCode)
+			return nil, image.NewError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindProcessing)
 		}
 
 		contentLength, _ := strconv.Atoi(res.Header.Get("Content-Length"))
@@ -64,7 +64,7 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
-		return nil, image.NewError(fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), res.StatusCode)
+		return nil, image.NewError(fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindProcessing)
 	}
 
 	buf, err := io.ReadAll(res.Body)

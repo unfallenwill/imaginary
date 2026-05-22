@@ -11,32 +11,68 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
-	bodysource "github.com/h2non/imaginary/internal/source/body"
-	fssource "github.com/h2non/imaginary/internal/source/fs"
-	httpsource "github.com/h2non/imaginary/internal/source/http"
-	objectsource "github.com/h2non/imaginary/internal/source/object"
 )
 
-func Server(o config.ServerOptions) {
-	addr := o.Address + ":" + strconv.Itoa(o.Port)
-	handler := NewLog(NewServerMux(o), os.Stdout, o.LogLevel)
+// Config holds the full configuration for the HTTP image server.
+type Config struct {
+	// Network
+	Addr            string
+	Port            int
+	HTTPReadTimeout int
+	HTTPWriteTimeout int
+	CertFile        string
+	KeyFile         string
+	LogLevel        string
+
+	// Routing
+	PathPrefix string
+
+	// Middleware
+	CORS               bool
+	APIKey             string
+	Concurrency        int
+	Burst              int
+	HTTPCacheTTL       int
+	EnableURLSource    bool
+	Mount              string
+	EnableURLSignature bool
+	URLSignatureKey    string
+	Endpoints          EndpointSet
+
+	// Image processing
+	MaxAllowedPixels float64
+	MaxAllowedSize   int
+	ReturnSize       bool
+
+	// Error handling
+	Error ErrorConfig
+
+	// Object storage
+	ObjectStorage source.ObjectStorage
+
+	// Source resolver (wired externally)
+	Resolver *source.Resolver
+}
+
+func Server(cfg Config) {
+	addr := cfg.Addr + ":" + strconv.Itoa(cfg.Port)
+	handler := NewLog(NewServerMux(cfg), os.Stdout, cfg.LogLevel)
 
 	server := &http.Server{
 		Addr:           addr,
 		Handler:        handler,
 		MaxHeaderBytes: 1 << 20,
-		ReadTimeout:    time.Duration(o.HTTPReadTimeout) * time.Second,
-		WriteTimeout:   time.Duration(o.HTTPWriteTimeout) * time.Second,
+		ReadTimeout:    time.Duration(cfg.HTTPReadTimeout) * time.Second,
+		WriteTimeout:   time.Duration(cfg.HTTPWriteTimeout) * time.Second,
 	}
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		if err := listenAndServe(server, o); err != nil && err != http.ErrServerClosed {
+		if err := listenAndServe(server, cfg); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
@@ -54,64 +90,52 @@ func Server(o config.ServerOptions) {
 	}
 }
 
-func listenAndServe(s *http.Server, o config.ServerOptions) error {
-	if o.CertFile != "" && o.KeyFile != "" {
-		return s.ListenAndServeTLS(o.CertFile, o.KeyFile)
+func listenAndServe(s *http.Server, cfg Config) error {
+	if cfg.CertFile != "" && cfg.KeyFile != "" {
+		return s.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
 	}
 	return s.ListenAndServe()
 }
 
-func join(o config.ServerOptions, route string) string {
-	return path.Join(o.PathPrefix, route)
+func join(prefix, route string) string {
+	return path.Join(prefix, route)
 }
 
 // NewServerMux creates a new HTTP server route multiplexer.
-func NewServerMux(o config.ServerOptions) http.Handler {
-	return NewServerMuxWithResolver(o, NewSourceResolver(o))
-}
-
-// NewSourceResolver creates the default source resolver for image requests.
-func NewSourceResolver(o config.ServerOptions) *source.Resolver {
-	return source.NewResolver(
-		bodysource.NewBodyImageSource(source.NewSourceConfig(o, bodysource.ImageSourceTypeBody)),
-		objectsource.NewObjectImageSource(source.NewSourceConfig(o, objectsource.ImageSourceTypeObject)),
-		fssource.NewFileSystemImageSource(source.NewSourceConfig(o, fssource.ImageSourceTypeFileSystem)),
-		httpsource.NewHTTPImageSource(source.NewSourceConfig(o, httpsource.ImageSourceTypeHTTP)),
-	)
-}
-
-// NewServerMuxWithResolver creates a new HTTP server route multiplexer with an explicit source resolver.
-func NewServerMuxWithResolver(o config.ServerOptions, resolver *source.Resolver) http.Handler {
+func NewServerMux(cfg Config) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.Handle(join(o, "/"), Middleware(indexController(o), o))
-	mux.Handle(join(o, "/form"), Middleware(formController(o), o))
-	mux.Handle(join(o, "/health"), Middleware(healthController, o))
+	prefix := cfg.PathPrefix
+	resolver := cfg.Resolver
 
-	image := ImageMiddleware(o, resolver)
-	mux.Handle(join(o, "/resize"), image(img.Resize))
-	mux.Handle(join(o, "/fit"), image(img.Fit))
-	mux.Handle(join(o, "/enlarge"), image(img.Enlarge))
-	mux.Handle(join(o, "/extract"), image(img.Extract))
-	mux.Handle(join(o, "/crop"), image(img.Crop))
-	mux.Handle(join(o, "/smartcrop"), image(img.SmartCrop))
-	mux.Handle(join(o, "/rotate"), image(img.Rotate))
-	mux.Handle(join(o, "/autorotate"), image(img.AutoRotate))
-	mux.Handle(join(o, "/flip"), image(img.Flip))
-	mux.Handle(join(o, "/flop"), image(img.Flop))
-	mux.Handle(join(o, "/thumbnail"), image(img.Thumbnail))
-	pathThumbnail := Middleware(pathThumbnailController(o), o)
-	if o.EnableURLSignature {
-		pathThumbnail = validateURLSignature(pathThumbnail, o)
+	mux.Handle(join(prefix, "/"), Middleware(indexController(prefix, cfg.Error), cfg))
+	mux.Handle(join(prefix, "/form"), Middleware(formController(prefix), cfg))
+	mux.Handle(join(prefix, "/health"), Middleware(healthController, cfg))
+
+	image := ImageMiddleware(cfg, resolver)
+	mux.Handle(join(prefix, "/resize"), image(img.Resize))
+	mux.Handle(join(prefix, "/fit"), image(img.Fit))
+	mux.Handle(join(prefix, "/enlarge"), image(img.Enlarge))
+	mux.Handle(join(prefix, "/extract"), image(img.Extract))
+	mux.Handle(join(prefix, "/crop"), image(img.Crop))
+	mux.Handle(join(prefix, "/smartcrop"), image(img.SmartCrop))
+	mux.Handle(join(prefix, "/rotate"), image(img.Rotate))
+	mux.Handle(join(prefix, "/autorotate"), image(img.AutoRotate))
+	mux.Handle(join(prefix, "/flip"), image(img.Flip))
+	mux.Handle(join(prefix, "/flop"), image(img.Flop))
+	mux.Handle(join(prefix, "/thumbnail"), image(img.Thumbnail))
+	pathThumbnail := Middleware(pathThumbnailController(cfg), cfg)
+	if cfg.EnableURLSignature {
+		pathThumbnail = validateURLSignature(pathThumbnail, cfg)
 	}
-	mux.Handle(thumbnailPathPattern(o), pathThumbnail)
-	mux.Handle(join(o, "/zoom"), image(img.Zoom))
-	mux.Handle(join(o, "/convert"), image(img.Convert))
-	mux.Handle(join(o, "/watermark"), image(img.Watermark))
-	mux.Handle(join(o, "/watermarkimage"), image(img.WatermarkImage))
-	mux.Handle(join(o, "/info"), image(img.Info))
-	mux.Handle(join(o, "/blur"), image(img.GaussianBlur))
-	mux.Handle(join(o, "/pipeline"), image(img.Pipeline))
+	mux.Handle(thumbnailPathPattern(prefix), pathThumbnail)
+	mux.Handle(join(prefix, "/zoom"), image(img.Zoom))
+	mux.Handle(join(prefix, "/convert"), image(img.Convert))
+	mux.Handle(join(prefix, "/watermark"), image(img.Watermark))
+	mux.Handle(join(prefix, "/watermarkimage"), image(img.WatermarkImage))
+	mux.Handle(join(prefix, "/info"), image(img.Info))
+	mux.Handle(join(prefix, "/blur"), image(img.GaussianBlur))
+	mux.Handle(join(prefix, "/pipeline"), image(img.Pipeline))
 
 	return mux
 }

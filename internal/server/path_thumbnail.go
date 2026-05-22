@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 )
 
@@ -25,58 +24,58 @@ type pathThumbnailParams struct {
 	Key     string
 }
 
-func pathThumbnailController(o config.ServerOptions) func(http.ResponseWriter, *http.Request) {
+func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			img.ErrorReply(r, w, img.ErrMethodNotAllowed, o)
+			ErrorReply(w, r, img.ErrMethodNotAllowed, cfg.Error)
 			return
 		}
-		if o.ObjectStorage == nil {
-			img.ErrorReply(r, w, img.ErrNotImplemented, o)
+		if cfg.ObjectStorage == nil {
+			ErrorReply(w, r, img.ErrNotImplemented, cfg.Error)
 			return
 		}
-		if o.Endpoints.Contains("thumbnail") {
-			img.ErrorReply(r, w, img.ErrNotImplemented, o)
+		if cfg.Endpoints.Contains("thumbnail") {
+			ErrorReply(w, r, img.ErrNotImplemented, cfg.Error)
 			return
 		}
 
-		params, err := parsePathThumbnailParams(r.URL.Path, o)
+		params, err := parsePathThumbnailParams(r.URL.Path, cfg.PathPrefix)
 		if err != nil {
-			img.ErrorReply(r, w, img.NewError(err.Error(), http.StatusBadRequest), o)
+			ErrorReply(w, r, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
 			return
 		}
-		if o.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/1000000 > o.MaxAllowedPixels {
-			img.ErrorReply(r, w, img.ErrResolutionTooBig, o)
+		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/1000000 > cfg.MaxAllowedPixels {
+			ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
 			return
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), objectStorageTimeout)
 		defer cancel()
 
-		body, contentLength, err := o.ObjectStorage.Open(ctx, params.Key)
+		body, contentLength, err := cfg.ObjectStorage.Open(ctx, params.Key)
 		if err != nil {
-			img.ErrorReply(r, w, img.NewError(fmt.Sprintf("Error while fetching object: %s", err.Error()), http.StatusBadRequest), o)
+			ErrorReply(w, r, img.NewError(fmt.Sprintf("Error while fetching object: %s", err.Error()), img.KindInvalidParam), cfg.Error)
 			return
 		}
 		defer func() { _ = body.Close() }()
 
-		if o.MaxAllowedSize > 0 && contentLength > int64(o.MaxAllowedSize) {
-			img.ErrorReply(r, w, img.NewError(fmt.Sprintf("Object size %d exceeds maximum allowed %d bytes", contentLength, o.MaxAllowedSize), http.StatusRequestEntityTooLarge), o)
+		if cfg.MaxAllowedSize > 0 && contentLength > int64(cfg.MaxAllowedSize) {
+			ErrorReply(w, r, img.NewError(fmt.Sprintf("Object size %d exceeds maximum allowed %d bytes", contentLength, cfg.MaxAllowedSize), img.KindInvalidParam), cfg.Error)
 			return
 		}
 
-		buf, err := readObjectBody(body, o.MaxAllowedSize)
+		buf, err := readObjectBody(body, cfg.MaxAllowedSize)
 		if err != nil {
-			img.ErrorReply(r, w, img.NewError(err.Error(), http.StatusBadRequest), o)
+			ErrorReply(w, r, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
 			return
 		}
 		if len(buf) == 0 {
-			img.ErrorReply(r, w, img.ErrEmptyBody, o)
+			ErrorReply(w, r, img.ErrEmptyBody, cfg.Error)
 			return
 		}
 
 		req := withPathThumbnailQuery(r, params)
-		imageHandler(w, req, buf, img.Thumbnail, o)
+		imageHandler(w, req, buf, img.Thumbnail, cfg)
 	}
 }
 
@@ -125,15 +124,15 @@ func cloneQuery(values url.Values) url.Values {
 	return cloned
 }
 
-func parsePathThumbnailParams(requestPath string, o config.ServerOptions) (pathThumbnailParams, error) {
+func parsePathThumbnailParams(requestPath, prefix string) (pathThumbnailParams, error) {
 	var params pathThumbnailParams
 
-	prefix := thumbnailPathPattern(o)
-	if !strings.HasPrefix(requestPath, prefix) {
+	pattern := thumbnailPathPattern(prefix)
+	if !strings.HasPrefix(requestPath, pattern) {
 		return params, fmt.Errorf("invalid thumbnail path")
 	}
 
-	parts := strings.SplitN(strings.TrimPrefix(requestPath, prefix), "/", 2)
+	parts := strings.SplitN(strings.TrimPrefix(requestPath, pattern), "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return params, fmt.Errorf("invalid thumbnail path")
 	}
@@ -227,8 +226,8 @@ func validateObjectKey(key string) error {
 	return nil
 }
 
-func thumbnailPathPattern(o config.ServerOptions) string {
-	pattern := path.Join(o.PathPrefix, "/thumbnail/")
+func thumbnailPathPattern(prefix string) string {
+	pattern := path.Join(prefix, "/thumbnail/")
 	if !strings.HasSuffix(pattern, "/") {
 		pattern += "/"
 	}

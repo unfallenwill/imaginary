@@ -2,122 +2,70 @@ package image
 
 import (
 	"encoding/json"
-	"net/http"
 	"strings"
-
-	"github.com/h2non/bimg"
-
-	"github.com/h2non/imaginary/internal/config"
 )
 
-var (
-	ErrNotFound             = NewError("Not found", http.StatusNotFound)
-	ErrInvalidAPIKey        = NewError("Invalid or missing API key", http.StatusUnauthorized)
-	ErrMethodNotAllowed     = NewError("HTTP method not allowed. Try with a POST or GET method (-enable-url-source flag must be defined)", http.StatusMethodNotAllowed)
-	ErrGetMethodNotAllowed  = NewError("GET method not allowed. Make sure remote URL source is enabled by using the flag: -enable-url-source", http.StatusMethodNotAllowed)
-	ErrUnsupportedMedia     = NewError("Unsupported media type", http.StatusNotAcceptable)
-	ErrOutputFormat         = NewError("Unsupported output image format", http.StatusBadRequest)
-	ErrEmptyBody            = NewError("Empty or unreadable image", http.StatusBadRequest)
-	ErrMissingParamFile     = NewError("Missing required param: file", http.StatusBadRequest)
-	ErrInvalidFilePath      = NewError("Invalid file path", http.StatusBadRequest)
-	ErrInvalidImageURL      = NewError("Invalid image URL", http.StatusBadRequest)
-	ErrMissingImageSource   = NewError("Cannot process the image due to missing or invalid params", http.StatusBadRequest)
-	ErrNotImplemented       = NewError("Not implemented endpoint", http.StatusNotImplemented)
-	ErrInvalidURLSignature  = NewError("Invalid URL signature", http.StatusBadRequest)
-	ErrURLSignatureMismatch = NewError("URL signature mismatch", http.StatusForbidden)
-	ErrResolutionTooBig     = NewError("Image resolution is too big", http.StatusUnprocessableEntity)
+// Kind represents the semantic category of an error in the image domain.
+// It is independent of HTTP status codes — the server layer maps kinds to HTTP statuses.
+type Kind int
+
+const (
+	KindUnknown         Kind = iota
+	KindNotFound             // resource not found
+	KindUnauthorized         // authentication failure
+	KindForbidden            // authorization or signature mismatch
+	KindMethodNotAllowed     // wrong HTTP method
+	KindUnsupportedMedia     // image format not supported
+	KindInvalidParam         // missing or malformed parameter
+	KindEmptyBody            // empty or unreadable image data
+	KindResolutionTooBig     // image resolution exceeds limit
+	KindNotImplemented       // endpoint disabled
+	KindProcessing           // error during image processing
 )
 
+// Error represents a domain-level image processing error.
+// It carries a semantic Kind, not an HTTP status code.
 type Error struct {
 	Message string `json:"message,omitempty"`
-	Code    int    `json:"status"`
-}
-
-type errorResponse struct {
-	Error  string `json:"error"`
-	Status int    `json:"status"`
-}
-
-func (e Error) JSON() []byte {
-	buf, _ := json.Marshal(e)
-	return buf
+	Kind    Kind   `json:"code"`
 }
 
 func (e Error) Error() string {
 	return e.Message
 }
 
-func (e Error) HTTPCode() int {
-	if e.Code >= 400 && e.Code <= 511 {
-		return e.Code
+// JSON serializes the error for wire transport.
+// Note: the "status" field contains the semantic Kind code, not an HTTP status.
+// The server layer provides the HTTP status mapping where needed.
+func (e Error) JSON() []byte {
+	type wire struct {
+		Message string `json:"message,omitempty"`
+		Status  int    `json:"status"`
 	}
-	return http.StatusServiceUnavailable
+	buf, _ := json.Marshal(wire{Message: e.Message, Status: int(e.Kind)})
+	return buf
 }
 
-func NewError(err string, code int) Error {
-	err = strings.ReplaceAll(err, "\n", "")
-	return Error{Message: err, Code: code}
+// NewError creates an image.Error with an explicit message and semantic kind.
+func NewError(message string, kind Kind) Error {
+	message = strings.ReplaceAll(message, "\n", "")
+	return Error{Message: message, Kind: kind}
 }
 
-func sendErrorResponse(w http.ResponseWriter, httpStatusCode int, err error) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(httpStatusCode)
-	buf, _ := json.Marshal(errorResponse{Error: err.Error(), Status: httpStatusCode})
-	_, _ = w.Write(buf)
-}
-
-func replyWithPlaceholder(req *http.Request, w http.ResponseWriter, errCaller Error, o config.ServerOptions) error {
-	var err error
-	bimgOptions := bimg.Options{
-		Force:   true,
-		Crop:    true,
-		Enlarge: true,
-		Type:    ImageType(req.URL.Query().Get("type")),
-	}
-
-	bimgOptions.Width, err = parseInt(req.URL.Query().Get("width"))
-	if err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, err)
-		return err
-	}
-
-	bimgOptions.Height, err = parseInt(req.URL.Query().Get("height"))
-	if err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, err)
-		return err
-	}
-
-	// Resize placeholder to expected output
-	buf, err := bimg.Resize(o.PlaceholderImage, bimgOptions)
-	if err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, err)
-		return err
-	}
-
-	// Use final response body image
-	image := buf
-
-	// Placeholder image response
-	w.Header().Set("Content-Type", GetImageMimeType(bimg.DetermineImageType(image)))
-	w.Header().Set("Error", string(errCaller.JSON()))
-	if o.PlaceholderStatus != 0 {
-		w.WriteHeader(o.PlaceholderStatus)
-	} else {
-		w.WriteHeader(errCaller.HTTPCode())
-	}
-	_, _ = w.Write(image)
-
-	return errCaller
-}
-
-func ErrorReply(req *http.Request, w http.ResponseWriter, err Error, o config.ServerOptions) {
-	// Reply with placeholder if required
-	if o.EnablePlaceholder || o.Placeholder != "" {
-		_ = replyWithPlaceholder(req, w, err, o)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(err.HTTPCode())
-	_, _ = w.Write(err.JSON())
-}
+var (
+	ErrNotFound             = NewError("Not found", KindNotFound)
+	ErrInvalidAPIKey        = NewError("Invalid or missing API key", KindUnauthorized)
+	ErrMethodNotAllowed     = NewError("HTTP method not allowed. Try with a POST or GET method (-enable-url-source flag must be defined)", KindMethodNotAllowed)
+	ErrGetMethodNotAllowed  = NewError("GET method not allowed. Make sure remote URL source is enabled by using the flag: -enable-url-source", KindMethodNotAllowed)
+	ErrUnsupportedMedia     = NewError("Unsupported media type", KindUnsupportedMedia)
+	ErrOutputFormat         = NewError("Unsupported output image format", KindInvalidParam)
+	ErrEmptyBody            = NewError("Empty or unreadable image", KindEmptyBody)
+	ErrMissingParamFile     = NewError("Missing required param: file", KindInvalidParam)
+	ErrInvalidFilePath      = NewError("Invalid file path", KindInvalidParam)
+	ErrInvalidImageURL      = NewError("Invalid image URL", KindInvalidParam)
+	ErrMissingImageSource   = NewError("Cannot process the image due to missing or invalid params", KindInvalidParam)
+	ErrNotImplemented       = NewError("Not implemented endpoint", KindNotImplemented)
+	ErrInvalidURLSignature  = NewError("Invalid URL signature", KindInvalidParam)
+	ErrURLSignatureMismatch = NewError("URL signature mismatch", KindForbidden)
+	ErrResolutionTooBig     = NewError("Image resolution is too big", KindResolutionTooBig)
+)

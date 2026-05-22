@@ -12,16 +12,15 @@ import (
 	"github.com/h2non/bimg"
 	"github.com/h2non/filetype"
 
-	"github.com/h2non/imaginary/internal/config"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )
 
-func indexController(o config.ServerOptions) func(w http.ResponseWriter, r *http.Request) {
+func indexController(prefix string, errCfg ErrorConfig) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != path.Join(o.PathPrefix, "/") {
-			img.ErrorReply(r, w, img.ErrNotFound, config.ServerOptions{})
+		if r.URL.Path != path.Join(prefix, "/") {
+			ErrorReply(w, r, img.ErrNotFound, errCfg)
 			return
 		}
 
@@ -42,30 +41,30 @@ func healthController(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
-func imageController(o config.ServerOptions, resolver *source.Resolver, operation img.Operation) func(http.ResponseWriter, *http.Request) {
+func imageController(cfg Config, resolver *source.Resolver, operation img.Operation) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
-		var imageSource = resolver.Match(req)
+		imageSource := resolver.Match(req)
 		if imageSource == nil {
-			img.ErrorReply(req, w, img.ErrMissingImageSource, o)
+			ErrorReply(w, req, img.ErrMissingImageSource, cfg.Error)
 			return
 		}
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
 			if xerr, ok := err.(img.Error); ok {
-				img.ErrorReply(req, w, xerr, o)
+				ErrorReply(w, req, xerr, cfg.Error)
 			} else {
-				img.ErrorReply(req, w, img.NewError(err.Error(), http.StatusBadRequest), o)
+				ErrorReply(w, req, img.NewError(err.Error(), img.KindInvalidParam), cfg.Error)
 			}
 			return
 		}
 
 		if len(buf) == 0 {
-			img.ErrorReply(req, w, img.ErrEmptyBody, o)
+			ErrorReply(w, req, img.ErrEmptyBody, cfg.Error)
 			return
 		}
 
-		imageHandler(w, req, buf, operation, o)
+		imageHandler(w, req, buf, operation, cfg)
 	}
 }
 
@@ -85,7 +84,7 @@ func determineAcceptMimeType(accept string) string {
 	return ""
 }
 
-func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation img.Operation, o config.ServerOptions) {
+func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation img.Operation, cfg Config) {
 	mimeType := http.DetectContentType(buf)
 
 	if mimeType == "application/octet-stream" {
@@ -102,13 +101,13 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	}
 
 	if !img.IsImageMimeTypeSupported(mimeType) {
-		img.ErrorReply(r, w, img.ErrUnsupportedMedia, o)
+		ErrorReply(w, r, img.ErrUnsupportedMedia, cfg.Error)
 		return
 	}
 
 	opts, err := img.BuildParamsFromQuery(r.URL.Query())
 	if err != nil {
-		img.ErrorReply(r, w, img.NewError("Error while processing parameters, "+err.Error(), http.StatusBadRequest), o)
+		ErrorReply(w, r, img.NewError("Error while processing parameters, "+err.Error(), img.KindInvalidParam), cfg.Error)
 		return
 	}
 
@@ -117,21 +116,21 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		opts.Type = determineAcceptMimeType(r.Header.Get("Accept"))
 		vary = "Accept"
 	} else if opts.Type != "" && img.ImageType(opts.Type) == 0 {
-		img.ErrorReply(r, w, img.ErrOutputFormat, o)
+		ErrorReply(w, r, img.ErrOutputFormat, cfg.Error)
 		return
 	}
 
 	sizeInfo, err := bimg.Size(buf)
 
 	if err != nil {
-		img.ErrorReply(r, w, img.NewError("Error while processing the image: "+err.Error(), http.StatusBadRequest), o)
+		ErrorReply(w, r, img.NewError("Error while processing the image: "+err.Error(), img.KindProcessing), cfg.Error)
 		return
 	}
 
 	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
 
-	if (imgResolution / 1000000) > o.MaxAllowedPixels {
-		img.ErrorReply(r, w, img.ErrResolutionTooBig, o)
+	if (imgResolution / 1000000) > cfg.MaxAllowedPixels {
+		ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
 		return
 	}
 
@@ -140,13 +139,13 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		if vary != "" {
 			w.Header().Set("Vary", vary)
 		}
-		img.ErrorReply(r, w, img.NewError("Error while processing the image: "+err.Error(), http.StatusBadRequest), o)
+		ErrorReply(w, r, img.NewError("Error while processing the image: "+err.Error(), img.KindProcessing), cfg.Error)
 		return
 	}
 
 	w.Header().Set("Content-Length", strconv.Itoa(len(image.Body)))
 	w.Header().Set("Content-Type", image.Mime)
-	if image.Mime != "application/json" && o.ReturnSize {
+	if image.Mime != "application/json" && cfg.ReturnSize {
 		meta, err := bimg.Metadata(image.Body)
 		if err == nil {
 			w.Header().Set("Image-Width", strconv.Itoa(meta.Size.Width))
@@ -159,7 +158,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	_, _ = w.Write(image.Body)
 }
 
-func formController(o config.ServerOptions) func(w http.ResponseWriter, r *http.Request) {
+func formController(prefix string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		operations := []struct {
 			name   string
@@ -194,7 +193,7 @@ func formController(o config.ServerOptions) func(w http.ResponseWriter, r *http.
 		<form method="POST" action="%s?%s" enctype="multipart/form-data">
 		<input type="file" name="file" />
 		<input type="submit" value="Upload" />
-		</form>`, path.Join(o.PathPrefix, form.name), path.Join(o.PathPrefix, form.method), form.args)
+		</form>`, path.Join(prefix, form.name), path.Join(prefix, form.method), form.args)
 		}
 
 		html += "</body></html>"

@@ -5,17 +5,15 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/h2non/imaginary/internal/config"
 	"github.com/h2non/imaginary/internal/source"
 	bodysource "github.com/h2non/imaginary/internal/source/body"
 	httpsource "github.com/h2non/imaginary/internal/source/http"
 )
 
 func TestResolverMatch(t *testing.T) {
-	opts := config.ServerOptions{EnableURLSource: true}
 	resolver := source.NewResolver(
-		bodysource.NewBodyImageSource(source.NewSourceConfig(opts, bodysource.ImageSourceTypeBody)),
-		httpsource.NewHTTPImageSource(source.NewSourceConfig(opts, httpsource.ImageSourceTypeHTTP)),
+		bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+		httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
 	)
 
 	u, _ := url.Parse("http://foo?url=http://bar/image.jpg")
