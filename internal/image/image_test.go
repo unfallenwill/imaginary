@@ -44,7 +44,7 @@ func TestImageResize(t *testing.T) {
 	})
 
 	t.Run("Width defined with NoCrop=false", func(t *testing.T) {
-		opts := ImageOptions{Width: 300, NoCrop: false, IsDefinedField: IsDefinedField{NoCrop: true}}
+		opts := ImageOptions{Width: 300, NoCrop: boolPtr(false)}
 		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
@@ -62,7 +62,7 @@ func TestImageResize(t *testing.T) {
 	})
 
 	t.Run("Width defined with NoCrop=true", func(t *testing.T) {
-		opts := ImageOptions{Width: 300, NoCrop: true, IsDefinedField: IsDefinedField{NoCrop: true}}
+		opts := ImageOptions{Width: 300, NoCrop: boolPtr(true)}
 		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
@@ -118,15 +118,15 @@ func TestImagePipelineOperations(t *testing.T) {
 	operations := PipelineOperations{
 		PipelineOperation{
 			Name: "crop",
-			Params: map[string]interface{}{
-				"width":  width,
-				"height": height,
+			Params: PipelineParams{
+				Width:  &width,
+				Height: &height,
 			},
 		},
 		PipelineOperation{
 			Name: "convert",
-			Params: map[string]interface{}{
-				"type": "webp",
+			Params: PipelineParams{
+				Type: "webp",
 			},
 		},
 	}

@@ -27,13 +27,13 @@ func TestReadParams(t *testing.T) {
 
 	assert := params.Width == 100 &&
 		params.Height == 80 &&
-		params.NoReplicate == true &&
+		derefBool(params.NoReplicate, false) == true &&
 		params.Opacity == 0.2 &&
 		params.Text == "hello" &&
 		params.Background[0] == 255 &&
 		params.Background[1] == 10 &&
 		params.Background[2] == 20 &&
-		params.Interlace == true
+		derefBool(params.Interlace, false) == true
 
 	if assert == false {
 		t.Error("Invalid params")
@@ -173,55 +173,76 @@ func TestGravity(t *testing.T) {
 	}
 }
 
-func TestReadMapParams(t *testing.T) {
-	cases := []struct {
-		params   map[string]interface{}
-		expected ImageOptions
-	}{
-		{
-			map[string]interface{}{
-				"width":   100,
-				"opacity": 0.1,
-				"type":    "webp",
-				"embed":   true,
-				"gravity": "west",
-				"color":   "255,200,150",
-			},
-			ImageOptions{
-				Width:   100,
-				Opacity: 0.1,
-				Type:    "webp",
-				Embed:   true,
-				Gravity: bimg.GravityWest,
-				Color:   []uint8{255, 200, 150},
-			},
-		},
+func TestBuildParamsFromOperation(t *testing.T) {
+	pp := PipelineParams{
+		Width:      intPtr(200),
+		Opacity:    floatPtr(2.2),
+		Force:      boolPtr(true),
+		StripMeta:  boolPtr(false),
+		Type:       "jpeg",
+		Background: "255,12,3",
 	}
 
-	for _, test := range cases {
-		opts, err := BuildParamsFromOperation(PipelineOperation{Params: test.params})
-		if err != nil {
-			t.Errorf("Error reading parameters %s", err)
-			t.FailNow()
-		}
-		if opts.Width != test.expected.Width {
-			t.Errorf("Invalid width: %d != %d", opts.Width, test.expected.Width)
-		}
-		if opts.Opacity != test.expected.Opacity {
-			t.Errorf("Invalid opacity: %#v != %#v", opts.Opacity, test.expected.Opacity)
-		}
-		if opts.Type != test.expected.Type {
-			t.Errorf("Invalid type: %s != %s", opts.Type, test.expected.Type)
-		}
-		if opts.Embed != test.expected.Embed {
-			t.Errorf("Invalid embed: %#v != %#v", opts.Embed, test.expected.Embed)
-		}
-		if opts.Gravity != test.expected.Gravity {
-			t.Errorf("Invalid gravity: %#v != %#v", opts.Gravity, test.expected.Gravity)
-		}
-		if opts.Color[0] != test.expected.Color[0] || opts.Color[1] != test.expected.Color[1] || opts.Color[2] != test.expected.Color[2] {
-			t.Errorf("Invalid color: %#v != %#v", opts.Color, test.expected.Color)
-		}
+	op := PipelineOperation{Params: pp}
+	options, err := BuildParamsFromOperation(op)
+	if err != nil {
+		t.Errorf("Expected this to work! %s", err)
+	}
+
+	if options.Width != 200 {
+		t.Errorf("Expected the Width to be coerced with the correct value of %d", 200)
+	}
+
+	if math.Abs(float64(options.Opacity)-2.2) > epsilon {
+		t.Errorf("Expected the Opacity to be coerced with the correct value of %f", 2.2)
+	}
+
+	if derefBool(options.Force, false) != true || derefBool(options.StripMetadata, false) != false {
+		t.Errorf("Expected boolean parameters to result in their respective value's\n%+v", options)
+	}
+
+	if options.Background[0] != 255 {
+		t.Errorf("Expected color parameter to be coerced with the correct value")
+	}
+}
+
+func TestPipelineParamsBoolNilVsValue(t *testing.T) {
+	pp := PipelineParams{
+		Flip:  boolPtr(true),
+		Flop:  boolPtr(false),
+		Force: nil,
+	}
+
+	op := PipelineOperation{Params: pp}
+	options, err := BuildParamsFromOperation(op)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if options.Flip == nil || *options.Flip != true {
+		t.Errorf("Expected Flip to be *true, got %v", options.Flip)
+	}
+	if options.Flop == nil || *options.Flop != false {
+		t.Errorf("Expected Flop to be *false, got %v", options.Flop)
+	}
+	if options.Force != nil {
+		t.Errorf("Expected Force to be nil (not set), got %v", options.Force)
+	}
+}
+
+func TestPipelineParamsPaletteFalse(t *testing.T) {
+	pp := PipelineParams{
+		Palette: boolPtr(false),
+	}
+
+	op := PipelineOperation{Params: pp}
+	options, err := BuildParamsFromOperation(op)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if options.Palette == nil || *options.Palette != false {
+		t.Errorf("Expected Palette to be *false (bug fix), got %v", options.Palette)
 	}
 }
 
@@ -246,162 +267,111 @@ func TestParseFunctions(t *testing.T) {
 	})
 }
 
-func TestBuildParamsFromOperation(t *testing.T) {
-	op := PipelineOperation{
-		Params: map[string]interface{}{
-			"width":      200,
-			"opacity":    2.2,
-			"force":      true,
-			"stripmeta":  false,
-			"type":       "jpeg",
-			"background": "255,12,3",
-		},
-	}
+func TestApplyQueryParam(t *testing.T) {
+	t.Run("integer fields", func(t *testing.T) {
+		cases := []struct {
+			key   string
+			value string
+			field string
+			want  int
+		}{
+			{"width", "100", "Width", 100},
+			{"height", "200", "Height", 200},
+			{"quality", "95", "Quality", 95},
+			{"rotate", "90", "Rotate", 90},
+			{"speed", "5", "Speed", 5},
+		}
 
-	options, err := BuildParamsFromOperation(op)
-	if err != nil {
-		t.Errorf("Expected this to work! %s", err)
-	}
+		for _, tc := range cases {
+			var opts ImageOptions
+			err := applyQueryParam(&opts, tc.key, tc.value)
+			if err != nil {
+				t.Errorf("applyQueryParam(%q, %q) returned error: %s", tc.key, tc.value, err)
+			}
+		}
+	})
 
-	if input := op.Params["width"].(int); options.Width != 200 {
-		t.Errorf("Expected the Width to be coerced with the correct value of %d", input)
-	}
+	t.Run("bool pointer fields", func(t *testing.T) {
+		var opts ImageOptions
+		err := applyQueryParam(&opts, "flip", "true")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if opts.Flip == nil || *opts.Flip != true {
+			t.Errorf("Expected Flip = *true, got %v", opts.Flip)
+		}
 
-	if input := op.Params["opacity"].(float64); math.Abs(input-float64(options.Opacity)) > epsilon {
-		t.Errorf("Expected the Opacity to be coerced with the correct value of %f", input)
-	}
+		err = applyQueryParam(&opts, "nocrop", "false")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if opts.NoCrop == nil || *opts.NoCrop != false {
+			t.Errorf("Expected NoCrop = *false, got %v", opts.NoCrop)
+		}
+	})
 
-	if options.Force != true || options.StripMetadata != false {
-		t.Errorf("Expected boolean parameters to result in their respective value's\n%+v", options)
-	}
+	t.Run("palette=false is respected", func(t *testing.T) {
+		var opts ImageOptions
+		err := applyQueryParam(&opts, "palette", "false")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if opts.Palette == nil || *opts.Palette != false {
+			t.Errorf("Expected Palette = *false (bug fix), got %v", opts.Palette)
+		}
+	})
 
-	if input := op.Params["background"].(string); options.Background[0] != 255 {
-		t.Errorf("Expected color parameter to be coerced with the correct value of %s", input)
+	t.Run("unknown key is ignored", func(t *testing.T) {
+		var opts ImageOptions
+		err := applyQueryParam(&opts, "unknownparam", "value")
+		if err != nil {
+			t.Errorf("Expected unknown key to be ignored, got error: %s", err)
+		}
+	})
+
+	t.Run("parsed string fields", func(t *testing.T) {
+		var opts ImageOptions
+		err := applyQueryParam(&opts, "gravity", "west")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if opts.Gravity != bimg.GravityWest {
+			t.Errorf("Expected GravityWest, got %d", opts.Gravity)
+		}
+
+		err = applyQueryParam(&opts, "extend", "copy")
+		if err != nil {
+			t.Fatalf("unexpected error: %s", err)
+		}
+		if opts.Extend != bimg.ExtendCopy {
+			t.Errorf("Expected ExtendCopy, got %d", opts.Extend)
+		}
+	})
+}
+
+func TestDerefBool(t *testing.T) {
+	if derefBool(nil, false) != false {
+		t.Error("Expected nil to return default false")
+	}
+	if derefBool(nil, true) != true {
+		t.Error("Expected nil to return default true")
+	}
+	tr := true
+	fl := false
+	if derefBool(&tr, false) != true {
+		t.Error("Expected &true to return true")
+	}
+	if derefBool(&fl, true) != false {
+		t.Error("Expected &false to return false")
 	}
 }
 
-func TestCoerceTypeFns(t *testing.T) {
-	t.Run("coerceTypeInt", func(t *testing.T) {
-		cases := []struct {
-			Input  interface{}
-			Expect int
-			Err    error
-		}{
-			{Input: "200", Expect: 200},
-			{Input: int(200), Expect: 200},
-			{Input: float64(200), Expect: 200},
-			{Input: false, Expect: 0, Err: ErrUnsupportedValue},
-		}
+// intPtr returns a pointer to the given int value.
+func intPtr(v int) *int {
+	return &v
+}
 
-		for _, tc := range cases {
-
-			result, err := coerceTypeInt(tc.Input)
-			if err != nil && tc.Err == nil {
-				t.Errorf("Did not expect error %s\n%+v", err, tc)
-				t.FailNow()
-			}
-
-			if tc.Err != nil && tc.Err != err {
-				t.Errorf("Expected an error to be thrown\nExpected: %s\nReceived: %s", tc.Err, err)
-				t.FailNow()
-			}
-
-			if tc.Err == nil && result != tc.Expect {
-				t.Errorf("Expected proper coercion %s\n%+v\n%+v", err, result, tc)
-			}
-		}
-	})
-
-	t.Run("coerceTypeFloat", func(t *testing.T) {
-		cases := []struct {
-			Input  interface{}
-			Expect float64
-			Err    error
-		}{
-			{Input: "200", Expect: 200},
-			{Input: int(200), Expect: 200},
-			{Input: float64(200), Expect: 200},
-			{Input: false, Expect: 0, Err: ErrUnsupportedValue},
-		}
-
-		for _, tc := range cases {
-
-			result, err := coerceTypeFloat(tc.Input)
-			if err != nil && tc.Err == nil {
-				t.Errorf("Did not expect error %s\n%+v", err, tc)
-				t.FailNow()
-			}
-
-			if tc.Err != nil && tc.Err != err {
-				t.Errorf("Expected an error to be thrown\nExpected: %s\nReceived: %s", tc.Err, err)
-				t.FailNow()
-			}
-
-			if tc.Err == nil && math.Abs(result-tc.Expect) > epsilon {
-				t.Errorf("Expected proper coercion %s\n%+v\n%+v", err, result, tc)
-			}
-		}
-	})
-
-	t.Run("coerceTypeBool", func(t *testing.T) {
-		cases := []struct {
-			Input  interface{}
-			Expect bool
-			Err    error
-		}{
-			{Input: "true", Expect: true},
-			{Input: true, Expect: true},
-			{Input: "1", Expect: true},
-			{Input: "bubblegum", Expect: false, Err: ErrUnsupportedValue},
-		}
-
-		for _, tc := range cases {
-
-			result, err := coerceTypeBool(tc.Input)
-			if err != nil && tc.Err == nil {
-				t.Errorf("Did not expect error %s\n%+v", err, tc)
-				t.FailNow()
-			}
-
-			if tc.Err != nil && tc.Err != err {
-				t.Errorf("Expected an error to be thrown\nExpected: %s\nReceived: %s", tc.Err, err)
-				t.FailNow()
-			}
-
-			if tc.Err == nil && result != tc.Expect {
-				t.Errorf("Expected proper coercion %s\n%+v\n%+v", err, result, tc)
-			}
-		}
-	})
-
-	t.Run("coerceTypeString", func(t *testing.T) {
-		cases := []struct {
-			Input  interface{}
-			Expect string
-			Err    error
-		}{
-			{Input: "true", Expect: "true"},
-			{Input: false, Err: ErrUnsupportedValue},
-			{Input: 0.0, Err: ErrUnsupportedValue},
-			{Input: 0, Err: ErrUnsupportedValue},
-		}
-
-		for _, tc := range cases {
-
-			result, err := coerceTypeString(tc.Input)
-			if err != nil && tc.Err == nil {
-				t.Errorf("Did not expect error %s\n%+v", err, tc)
-				t.FailNow()
-			}
-
-			if tc.Err != nil && tc.Err != err {
-				t.Errorf("Expected an error to be thrown\nExpected: %s\nReceived: %s", tc.Err, err)
-				t.FailNow()
-			}
-
-			if tc.Err == nil && result != tc.Expect {
-				t.Errorf("Expected proper coercion %s\n%+v\n%+v", err, result, tc)
-			}
-		}
-	})
+// floatPtr returns a pointer to the given float64 value.
+func floatPtr(v float64) *float64 {
+	return &v
 }

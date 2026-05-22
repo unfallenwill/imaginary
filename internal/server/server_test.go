@@ -127,7 +127,7 @@ func TestResize(t *testing.T) {
 func TestEnlarge(t *testing.T) {
 	ts := testServer(controller(img.Enlarge))
 	buf := readFile("large.jpg")
-	url := ts.URL + "?width=300&height=200"
+	url := ts.URL + "?width=300&height=200&nocrop=false"
 	defer ts.Close()
 
 	res, err := http.Post(url, "image/jpeg", buf)

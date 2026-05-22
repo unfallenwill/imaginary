@@ -92,8 +92,8 @@ func Resize(buf []byte, o ImageOptions) (Image, error) {
 	opts := BimgOptions(o)
 	opts.Embed = true
 
-	if o.IsDefinedField.NoCrop {
-		opts.Crop = !o.NoCrop
+	if o.NoCrop != nil {
+		opts.Crop = !*o.NoCrop
 	}
 
 	return Process(buf, opts)
@@ -117,7 +117,7 @@ func Fit(buf []byte, o ImageOptions) (Image, error) {
 
 	var originHeight, originWidth int
 	var fitHeight, fitWidth *int
-	if o.NoRotation || (metadata.Orientation <= 4) {
+	if derefBool(o.NoRotation, false) || (metadata.Orientation <= 4) {
 		originHeight = dims.Height
 		originWidth = dims.Width
 		fitHeight = &o.Height
@@ -155,7 +155,9 @@ func Enlarge(buf []byte, o ImageOptions) (Image, error) {
 	opts := BimgOptions(o)
 	opts.Enlarge = true
 
-	opts.Crop = !o.NoCrop
+	if o.NoCrop != nil {
+		opts.Crop = !*o.NoCrop
+	}
 
 	return Process(buf, opts)
 }
@@ -265,8 +267,8 @@ func Zoom(buf []byte, o ImageOptions) (Image, error) {
 		opts.AreaWidth = o.AreaWidth
 		opts.AreaHeight = o.AreaHeight
 
-		if o.IsDefinedField.NoCrop {
-			opts.Crop = !o.NoCrop
+		if o.NoCrop != nil {
+			opts.Crop = !*o.NoCrop
 		}
 	}
 
@@ -298,7 +300,7 @@ func Watermark(buf []byte, o ImageOptions) (Image, error) {
 	opts.Watermark.Margin = o.Margin
 	opts.Watermark.Width = o.TextWidth
 	opts.Watermark.Opacity = o.Opacity
-	opts.Watermark.NoReplicate = o.NoReplicate
+	opts.Watermark.NoReplicate = derefBool(o.NoReplicate, false)
 
 	if len(o.Color) > 2 {
 		opts.Watermark.Background = bimg.Color{R: o.Color[0], G: o.Color[1], B: o.Color[2]}

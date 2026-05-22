@@ -7,10 +7,9 @@ import (
 	"github.com/h2non/bimg"
 )
 
-// ImageOptions represent all the supported image transformation params as first level members
+// ImageOptions represent all the supported image transformation params as first level members.
+// Boolean fields use *bool so that "explicitly set to false" can be distinguished from "not set".
 type ImageOptions struct {
-	IsDefinedField
-
 	Width         int
 	Height        int
 	AreaWidth     int
@@ -24,15 +23,15 @@ type ImageOptions struct {
 	Factor        int
 	DPI           int
 	TextWidth     int
-	Flip          bool
-	Flop          bool
-	Force         bool
-	Embed         bool
-	NoCrop        bool
-	NoReplicate   bool
-	NoRotation    bool
-	NoProfile     bool
-	StripMetadata bool
+	Flip          *bool
+	Flop          *bool
+	Force         *bool
+	Embed         *bool
+	NoCrop        *bool
+	NoReplicate   *bool
+	NoRotation    *bool
+	NoProfile     *bool
+	StripMetadata *bool
 	Opacity       float32
 	Sigma         float64
 	MinAmpl       float64
@@ -43,7 +42,8 @@ type ImageOptions struct {
 	AspectRatio   string
 	Color         []uint8
 	Background    []uint8
-	Interlace     bool
+	Interlace     *bool
+	Palette       *bool
 	Speed         int
 	Extend        bimg.Extend
 	Gravity       bimg.Gravity
@@ -51,50 +51,159 @@ type ImageOptions struct {
 	Operations    PipelineOperations
 }
 
-// IsDefinedField holds boolean ImageOptions fields. If true it means the field was specified in the request. This
-// metadata allows for sane usage of default (false) values.
-type IsDefinedField struct {
-	Flip          bool
-	Flop          bool
-	Force         bool
-	Embed         bool
-	NoCrop        bool
-	NoReplicate   bool
-	NoRotation    bool
-	NoProfile     bool
-	StripMetadata bool
-	Interlace     bool
-	Palette       bool
+// boolPtr returns a pointer to the given bool value.
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// derefBool returns the value pointed to by p, or defaultVal if p is nil.
+func derefBool(p *bool, defaultVal bool) bool {
+	if p == nil {
+		return defaultVal
+	}
+	return *p
+}
+
+// PipelineParams holds typed parameters for a pipeline operation,
+// deserialized directly from JSON. Pointer fields distinguish "not provided" from
+// "provided as zero/empty".
+type PipelineParams struct {
+	Width       *int    `json:"width"`
+	Height      *int    `json:"height"`
+	Top         *int    `json:"top"`
+	Left        *int    `json:"left"`
+	AreaWidth   *int    `json:"areawidth"`
+	AreaHeight  *int    `json:"areaheight"`
+	Quality     *int    `json:"quality"`
+	Compression *int    `json:"compression"`
+	Rotate      *int    `json:"rotate"`
+	Margin      *int    `json:"margin"`
+	Factor      *int    `json:"factor"`
+	DPI         *int    `json:"dpi"`
+	TextWidth   *int    `json:"textwidth"`
+	Speed       *int    `json:"speed"`
+
+	Opacity *float64 `json:"opacity"`
+	Sigma   *float64 `json:"sigma"`
+	MinAmpl *float64 `json:"minampl"`
+
+	Flip          *bool   `json:"flip"`
+	Flop          *bool   `json:"flop"`
+	NoCrop        *bool   `json:"nocrop"`
+	NoProfile     *bool   `json:"noprofile"`
+	NoRotation    *bool   `json:"norotation"`
+	NoReplicate   *bool   `json:"noreplicate"`
+	Force         *bool   `json:"force"`
+	Embed         *bool   `json:"embed"`
+	StripMeta     *bool   `json:"stripmeta"`
+	Interlace     *bool   `json:"interlace"`
+	Palette       *bool   `json:"palette"`
+
+	Text        string `json:"text"`
+	Image       string `json:"image"`
+	Font        string `json:"font"`
+	Type        string `json:"type"`
+	AspectRatio string `json:"aspectratio"`
+	Color       string `json:"color"`
+	Background  string `json:"background"`
+	Colorspace  string `json:"colorspace"`
+	Gravity     string `json:"gravity"`
+	Extend      string `json:"extend"`
+}
+
+// derefInt returns the value pointed to by p, or 0 if p is nil.
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// derefFloat64 returns the value pointed to by p, or 0.0 if p is nil.
+func derefFloat64(p *float64) float64 {
+	if p == nil {
+		return 0.0
+	}
+	return *p
+}
+
+// ToImageOptions converts PipelineParams to ImageOptions, applying defaults.
+func (p PipelineParams) ToImageOptions() ImageOptions {
+	opts := ImageOptions{
+		Extend:        bimg.ExtendCopy,
+		Width:         derefInt(p.Width),
+		Height:        derefInt(p.Height),
+		Top:           derefInt(p.Top),
+		Left:          derefInt(p.Left),
+		AreaWidth:     derefInt(p.AreaWidth),
+		AreaHeight:    derefInt(p.AreaHeight),
+		Quality:       derefInt(p.Quality),
+		Compression:   derefInt(p.Compression),
+		Rotate:        derefInt(p.Rotate),
+		Margin:        derefInt(p.Margin),
+		Factor:        derefInt(p.Factor),
+		DPI:           derefInt(p.DPI),
+		TextWidth:     derefInt(p.TextWidth),
+		Speed:         derefInt(p.Speed),
+		Opacity:       float32(derefFloat64(p.Opacity)),
+		Sigma:         derefFloat64(p.Sigma),
+		MinAmpl:       derefFloat64(p.MinAmpl),
+		Flip:          p.Flip,
+		Flop:          p.Flop,
+		NoCrop:        p.NoCrop,
+		NoProfile:     p.NoProfile,
+		NoRotation:    p.NoRotation,
+		NoReplicate:   p.NoReplicate,
+		Force:         p.Force,
+		Embed:         p.Embed,
+		StripMetadata: p.StripMeta,
+		Interlace:     p.Interlace,
+		Palette:       p.Palette,
+		Text:          p.Text,
+		Image:         p.Image,
+		Font:          p.Font,
+		Type:          p.Type,
+		AspectRatio:   p.AspectRatio,
+	}
+
+	if p.Color != "" {
+		opts.Color = parseColor(p.Color)
+	}
+	if p.Background != "" {
+		opts.Background = parseColor(p.Background)
+	}
+	if p.Colorspace != "" {
+		opts.Colorspace = parseColorspace(p.Colorspace)
+	}
+	if p.Gravity != "" {
+		opts.Gravity = parseGravity(p.Gravity)
+	}
+	if p.Extend != "" {
+		opts.Extend = parseExtendMode(p.Extend)
+	}
+
+	return opts
 }
 
 // PipelineOperation represents the structure for an operation field.
 type PipelineOperation struct {
-	Name          string                 `json:"operation"`
-	IgnoreFailure bool                   `json:"ignore_failure"`
-	Params        map[string]interface{} `json:"params"`
-	ImageOptions  ImageOptions           `json:"-"`
-	Operation     Operation              `json:"-"`
+	Name          string         `json:"operation"`
+	IgnoreFailure bool           `json:"ignore_failure"`
+	Params        PipelineParams `json:"params"`
+	ImageOptions  ImageOptions   `json:"-"`
+	Operation     Operation      `json:"-"`
 }
 
 // PipelineOperations defines the expected interface for a list of operations.
 type PipelineOperations []PipelineOperation
 
-func transformByAspectRatio(params map[string]interface{}) (width, height int) {
-	width, _ = coerceTypeInt(params["width"])
-	height, _ = coerceTypeInt(params["height"])
-
-	aspectRatio, ok := params["aspectratio"].(map[string]int)
-	if !ok {
-		return
-	}
-
+func transformByAspectRatio(width, height int, ar map[string]int) (int, int) {
 	if width != 0 {
-		height = width / aspectRatio["width"] * aspectRatio["height"]
+		height = width / ar["width"] * ar["height"]
 	} else {
-		width = height / aspectRatio["height"] * aspectRatio["width"]
+		width = height / ar["height"] * ar["width"]
 	}
-
-	return
+	return width, height
 }
 
 func parseAspectRatio(val string) map[string]int {
@@ -129,22 +238,22 @@ func BimgOptions(o ImageOptions) bimg.Options {
 	opts := bimg.Options{
 		Width:          o.Width,
 		Height:         o.Height,
-		Flip:           o.Flip,
-		Flop:           o.Flop,
+		Flip:           derefBool(o.Flip, false),
+		Flop:           derefBool(o.Flop, false),
 		Quality:        o.Quality,
 		Compression:    o.Compression,
-		NoAutoRotate:   o.NoRotation,
-		NoProfile:      o.NoProfile,
-		Force:          o.Force,
+		NoAutoRotate:   derefBool(o.NoRotation, false),
+		NoProfile:      derefBool(o.NoProfile, false),
+		Force:          derefBool(o.Force, false),
 		Gravity:        o.Gravity,
-		Embed:          o.Embed,
+		Embed:          derefBool(o.Embed, false),
 		Extend:         o.Extend,
 		Interpretation: o.Colorspace,
-		StripMetadata:  o.StripMetadata,
+		StripMetadata:  derefBool(o.StripMetadata, false),
 		Type:           ImageType(o.Type),
 		Rotate:         bimg.Angle(o.Rotate),
-		Interlace:      o.Interlace,
-		Palette:        o.Palette,
+		Interlace:      derefBool(o.Interlace, false),
+		Palette:        derefBool(o.Palette, false),
 		Speed:          o.Speed,
 	}
 
@@ -153,12 +262,10 @@ func BimgOptions(o ImageOptions) bimg.Options {
 	}
 
 	if shouldTransformByAspectRatio(opts.Height, opts.Width) && o.AspectRatio != "" {
-		params := make(map[string]interface{})
-		params["height"] = opts.Height
-		params["width"] = opts.Width
-		params["aspectratio"] = parseAspectRatio(o.AspectRatio)
-
-		opts.Width, opts.Height = transformByAspectRatio(params)
+		ar := parseAspectRatio(o.AspectRatio)
+		if ar != nil {
+			opts.Width, opts.Height = transformByAspectRatio(opts.Width, opts.Height, ar)
+		}
 	}
 
 	if o.Sigma > 0 || o.MinAmpl > 0 {
