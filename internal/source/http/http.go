@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
@@ -15,6 +16,12 @@ import (
 
 const ImageSourceTypeHTTP source.ImageSourceType = "http"
 const URLQueryKey = "url"
+
+// upstreamClient is the shared HTTP client for fetching remote images.
+// It has a reasonable timeout and is safe for concurrent use.
+var upstreamClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
 
 type HTTPImageSource struct {
 	Config *source.SourceConfig
@@ -42,12 +49,12 @@ func (s *HTTPImageSource) GetImage(req *http.Request) ([]byte, error) {
 func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, error) {
 	if s.Config.MaxAllowedSize > 0 {
 		req := newHTTPRequest(s, ireq, http.MethodHead, url)
-		res, err := http.DefaultClient.Do(req)
+		res, err := upstreamClient.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching remote http image headers: %v", err)
+			return nil, fmt.Errorf("error fetching remote http image headers: %w", err)
 		}
 		_ = res.Body.Close()
-		if res.StatusCode < 200 && res.StatusCode > 206 {
+		if res.StatusCode < 200 || res.StatusCode > 206 {
 			return nil, image.NewError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindProcessing)
 		}
 
@@ -58,9 +65,9 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 	}
 
 	req := newHTTPRequest(s, ireq, http.MethodGet, url)
-	res, err := http.DefaultClient.Do(req)
+	res, err := upstreamClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching remote http image: %v", err)
+		return nil, fmt.Errorf("error fetching remote http image: %w", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
@@ -101,7 +108,7 @@ func parseURL(request *http.Request) (*url.URL, error) {
 }
 
 func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) *http.Request {
-	req, _ := http.NewRequest(method, url.String(), nil)
+	req, _ := http.NewRequestWithContext(ireq.Context(), method, url.String(), nil)
 	req.Header.Set("User-Agent", "imaginary/"+version.Version)
 	req.URL = url
 
@@ -128,7 +135,7 @@ func shouldRestrictOrigin(url *url.URL, origins []*url.URL) bool {
 			}
 		}
 
-		if origin.Host[0:2] == "*." {
+		if len(origin.Host) >= 2 && origin.Host[0:2] == "*." {
 			if url.Host == origin.Host[2:] {
 				if strings.HasPrefix(url.Path, origin.Path) {
 					return false

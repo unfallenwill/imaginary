@@ -37,6 +37,7 @@ type ImageOptions struct {
 	MinAmpl       float64
 	Text          string
 	Image         string
+	ImageBytes    []byte
 	Font          string
 	Type          string
 	AspectRatio   string
@@ -101,6 +102,7 @@ type PipelineParams struct {
 
 	Text        string `json:"text"`
 	Image       string `json:"image"`
+	ImageBytes  []byte `json:"-"`
 	Font        string `json:"font"`
 	Type        string `json:"type"`
 	AspectRatio string `json:"aspectratio"`
@@ -161,6 +163,7 @@ func (p PipelineParams) ToImageOptions() ImageOptions {
 		Palette:       p.Palette,
 		Text:          p.Text,
 		Image:         p.Image,
+		ImageBytes:    p.ImageBytes,
 		Font:          p.Font,
 		Type:          p.Type,
 		AspectRatio:   p.AspectRatio,

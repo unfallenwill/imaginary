@@ -1,13 +1,16 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/h2non/bimg"
 	"github.com/h2non/filetype"
@@ -16,6 +19,12 @@ import (
 	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )
+
+// remoteClient is the HTTP client for fetching remote resources (e.g. watermark images).
+// It has a built-in timeout as a safety net; per-request context deadlines provide the primary cutoff.
+var remoteClient = &http.Client{
+	Timeout: 15 * time.Second,
+}
 
 func indexController(prefix string, errCfg ErrorConfig) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -134,6 +143,30 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		return
 	}
 
+	// Resolve watermark image URL to bytes before entering the pure domain layer.
+	// The image package must never perform I/O — all network calls happen here.
+	if opts.Image != "" && len(opts.ImageBytes) == 0 {
+		imageBytes, err := fetchRemoteImage(r.Context(), opts.Image, cfg.MaxAllowedSize)
+		if err != nil {
+			ErrorReply(w, r, img.NewError("Unable to fetch watermark image: "+err.Error(), img.KindInvalidParam), cfg.Error)
+			return
+		}
+		opts.ImageBytes = imageBytes
+	}
+
+	// Pipeline operations that contain a watermarkImage step also need their
+	// image URLs resolved to bytes before execution.
+	for i := range opts.Operations {
+		if opts.Operations[i].Name == "watermarkImage" && opts.Operations[i].Params.Image != "" {
+			imageBytes, err := fetchRemoteImage(r.Context(), opts.Operations[i].Params.Image, cfg.MaxAllowedSize)
+			if err != nil {
+				ErrorReply(w, r, img.NewError("Unable to fetch watermark image: "+err.Error(), img.KindInvalidParam), cfg.Error)
+				return
+			}
+			opts.Operations[i].Params.ImageBytes = imageBytes
+		}
+	}
+
 	image, err := operation.Run(buf, opts)
 	if err != nil {
 		if vary != "" {
@@ -201,4 +234,44 @@ func formController(prefix string) func(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = w.Write([]byte(html))
 	}
+}
+
+// fetchRemoteImage downloads an image from a URL with proper context propagation,
+// timeout, and size limits. This is the only place in the server where outbound
+// HTTP requests for watermark images are made.
+func fetchRemoteImage(ctx context.Context, imageURL string, maxAllowedSize int) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("invalid watermark URL: %w", err)
+	}
+
+	resp, err := remoteClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote returned status %d", resp.StatusCode)
+	}
+
+	var reader io.Reader = resp.Body
+	if maxAllowedSize > 0 {
+		reader = io.LimitReader(reader, int64(maxAllowedSize))
+	} else {
+		reader = io.LimitReader(reader, 1e6) // 1MB default limit
+	}
+
+	buf, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	if len(buf) == 0 {
+		return nil, fmt.Errorf("empty response body")
+	}
+
+	return buf, nil
 }
