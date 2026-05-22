@@ -2,7 +2,6 @@ package image
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -34,6 +33,11 @@ type Error struct {
 	Code    int    `json:"status"`
 }
 
+type errorResponse struct {
+	Error  string `json:"error"`
+	Status int    `json:"status"`
+}
+
 func (e Error) JSON() []byte {
 	buf, _ := json.Marshal(e)
 	return buf
@@ -51,14 +55,15 @@ func (e Error) HTTPCode() int {
 }
 
 func NewError(err string, code int) Error {
-	err = strings.Replace(err, "\n", "", -1)
+	err = strings.ReplaceAll(err, "\n", "")
 	return Error{Message: err, Code: code}
 }
 
 func sendErrorResponse(w http.ResponseWriter, httpStatusCode int, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(httpStatusCode)
-	_, _ = w.Write([]byte(fmt.Sprintf("{\"error\":\"%s\", \"status\": %d}", err.Error(), httpStatusCode)))
+	buf, _ := json.Marshal(errorResponse{Error: err.Error(), Status: httpStatusCode})
+	_, _ = w.Write(buf)
 }
 
 func replyWithPlaceholder(req *http.Request, w http.ResponseWriter, errCaller Error, o config.ServerOptions) error {

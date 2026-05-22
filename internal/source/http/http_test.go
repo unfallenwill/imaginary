@@ -1,10 +1,10 @@
 package httpsource
 
 import (
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -57,7 +57,7 @@ func TestHttpImageSource(t *testing.T) {
 	var body []byte
 	var err error
 
-	buf, _ := ioutil.ReadFile(fixtureImage)
+	buf, _ := os.ReadFile(fixtureImage)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(buf)
 	}))
@@ -86,7 +86,7 @@ func TestHttpImageSource(t *testing.T) {
 }
 
 func TestHttpImageSourceAllowedOrigin(t *testing.T) {
-	buf, _ := ioutil.ReadFile(fixtureImage)
+	buf, _ := os.ReadFile(fixtureImage)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(buf)
 	}))
@@ -313,7 +313,7 @@ func TestHttpImageSourceExceedsMaximumAllowedLength(t *testing.T) {
 	var body []byte
 	var err error
 
-	buf, _ := ioutil.ReadFile(fixture1024Bytes)
+	buf, _ := os.ReadFile(fixture1024Bytes)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write(buf)
 	}))

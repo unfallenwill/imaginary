@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - gosec
+    - ineffassign
+    - unconvert
+    - misspell
+  exclusions:
+    rules:
+      # Tests commonly use variable URLs and file paths.
+      - path: _test\.go
+        linters:
+          - gosec
+      # The fs source intentionally reads files from the configured mount path.
+      - path: internal/source/fs/fs\.go
+        text: "G304:"
+        linters:
+          - gosec
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

@@ -3,7 +3,6 @@ package image
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -14,7 +13,7 @@ import (
 func TestImageResize(t *testing.T) {
 	t.Run("Width and Height defined", func(t *testing.T) {
 		opts := ImageOptions{Width: 300, Height: 300}
-		buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
 		if err != nil {
@@ -30,7 +29,7 @@ func TestImageResize(t *testing.T) {
 
 	t.Run("Width defined", func(t *testing.T) {
 		opts := ImageOptions{Width: 300}
-		buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
 		if err != nil {
@@ -46,7 +45,7 @@ func TestImageResize(t *testing.T) {
 
 	t.Run("Width defined with NoCrop=false", func(t *testing.T) {
 		opts := ImageOptions{Width: 300, NoCrop: false, IsDefinedField: IsDefinedField{NoCrop: true}}
-		buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
 		if err != nil {
@@ -64,7 +63,7 @@ func TestImageResize(t *testing.T) {
 
 	t.Run("Width defined with NoCrop=true", func(t *testing.T) {
 		opts := ImageOptions{Width: 300, NoCrop: true, IsDefinedField: IsDefinedField{NoCrop: true}}
-		buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 		img, err := Resize(buf, opts)
 		if err != nil {
@@ -84,7 +83,7 @@ func TestImageResize(t *testing.T) {
 
 func TestImageFit(t *testing.T) {
 	opts := ImageOptions{Width: 300, Height: 300}
-	buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 	img, err := Fit(buf, opts)
 	if err != nil {
@@ -100,7 +99,7 @@ func TestImageFit(t *testing.T) {
 }
 
 func TestImageAutoRotate(t *testing.T) {
-	buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 	img, err := AutoRotate(buf, ImageOptions{})
 	if err != nil {
 		t.Errorf("Cannot process image: %s", err)
@@ -133,7 +132,7 @@ func TestImagePipelineOperations(t *testing.T) {
 	}
 
 	opts := ImageOptions{Operations: operations}
-	buf, _ := ioutil.ReadAll(readImageFile("imaginary.jpg"))
+	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 	img, err := Pipeline(buf, opts)
 	if err != nil {

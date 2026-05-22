@@ -12,8 +12,8 @@ import (
 	"github.com/h2non/bimg"
 	"github.com/h2non/filetype"
 
-	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/config"
+	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )

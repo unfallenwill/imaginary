@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/config"
+	img "github.com/h2non/imaginary/internal/image"
 )
 
 func Server(o config.ServerOptions) {

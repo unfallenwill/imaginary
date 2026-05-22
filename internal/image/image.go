@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"strings"
@@ -322,7 +321,7 @@ func WatermarkImage(buf []byte, o ImageOptions) (Image, error) {
 
 	bodyReader := io.LimitReader(response.Body, 1e6)
 
-	imageBuf, err := ioutil.ReadAll(bodyReader)
+	imageBuf, err := io.ReadAll(bodyReader)
 	if len(imageBuf) == 0 {
 		errMessage := "Unable to read watermark image"
 

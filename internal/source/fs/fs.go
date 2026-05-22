@@ -2,9 +2,9 @@ package fs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 
@@ -57,7 +57,7 @@ func (s *FileSystemImageSource) buildPath(file string) (string, error) {
 }
 
 func (s *FileSystemImageSource) read(file string) ([]byte, error) {
-	buf, err := ioutil.ReadFile(file)
+	buf, err := os.ReadFile(file)
 	if err != nil {
 		return nil, image.ErrInvalidFilePath
 	}

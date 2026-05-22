@@ -2,7 +2,7 @@ package image
 
 import (
 	"encoding/base64"
-	"io/ioutil"
+	"io"
 	"strings"
 )
 
@@ -10,4 +10,4 @@ const placeholderData = `/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChA
 
 // Placeholder is the embedded fallback image used when -enable-placeholder is set
 // without an explicit -placeholder path.
-var Placeholder, _ = ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, strings.NewReader(placeholderData)))
+var Placeholder, _ = io.ReadAll(base64.NewDecoder(base64.StdEncoding, strings.NewReader(placeholderData)))
