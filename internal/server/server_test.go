@@ -295,10 +295,10 @@ func TestFit(t *testing.T) {
 
 func TestRemoteHTTPSource(t *testing.T) {
 	cfg := Config{
-		EnableURLSource:   true,
-		MaxAllowedPixels:  18.0,
-		MaxAllowedSize:    0,
-		PathPrefix:        "/",
+		EnableURLSource:  true,
+		MaxAllowedPixels: 18.0,
+		MaxAllowedSize:   0,
+		PathPrefix:       "/",
 		Resolver: source.NewResolver(
 			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
 			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
@@ -346,9 +346,9 @@ func TestRemoteHTTPSource(t *testing.T) {
 
 func TestInvalidRemoteHTTPSource(t *testing.T) {
 	cfg := Config{
-		EnableURLSource:   true,
-		MaxAllowedPixels:  18.0,
-		PathPrefix:        "/",
+		EnableURLSource:  true,
+		MaxAllowedPixels: 18.0,
+		PathPrefix:       "/",
 		Resolver: source.NewResolver(
 			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
 			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
@@ -455,8 +455,8 @@ func TestMountInvalidDirectory(t *testing.T) {
 
 func TestMountInvalidPath(t *testing.T) {
 	cfg := Config{
-		Mount:       "_invalid_",
-		PathPrefix:  "/",
+		Mount:      "_invalid_",
+		PathPrefix: "/",
 		Resolver: source.NewResolver(
 			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
 			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),

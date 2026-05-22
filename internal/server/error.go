@@ -20,17 +20,17 @@ type ErrorConfig struct {
 // kindToHTTP maps semantic error kinds to HTTP status codes.
 // This is the single place where domain semantics become transport details.
 var kindToHTTP = map[img.Kind]int{
-	img.KindUnknown:         http.StatusInternalServerError,
-	img.KindNotFound:        http.StatusNotFound,
-	img.KindUnauthorized:    http.StatusUnauthorized,
-	img.KindForbidden:       http.StatusForbidden,
+	img.KindUnknown:          http.StatusInternalServerError,
+	img.KindNotFound:         http.StatusNotFound,
+	img.KindUnauthorized:     http.StatusUnauthorized,
+	img.KindForbidden:        http.StatusForbidden,
 	img.KindMethodNotAllowed: http.StatusMethodNotAllowed,
 	img.KindUnsupportedMedia: http.StatusNotAcceptable,
-	img.KindInvalidParam:    http.StatusBadRequest,
-	img.KindEmptyBody:       http.StatusBadRequest,
+	img.KindInvalidParam:     http.StatusBadRequest,
+	img.KindEmptyBody:        http.StatusBadRequest,
 	img.KindResolutionTooBig: http.StatusUnprocessableEntity,
-	img.KindNotImplemented:  http.StatusNotImplemented,
-	img.KindProcessing:      http.StatusBadRequest,
+	img.KindNotImplemented:   http.StatusNotImplemented,
+	img.KindProcessing:       http.StatusBadRequest,
 }
 
 // httpStatusFor maps an image.Error's Kind to an HTTP status code.

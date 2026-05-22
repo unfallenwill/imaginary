@@ -18,13 +18,13 @@ import (
 // Config holds the full configuration for the HTTP image server.
 type Config struct {
 	// Network
-	Addr            string
-	Port            int
-	HTTPReadTimeout int
+	Addr             string
+	Port             int
+	HTTPReadTimeout  int
 	HTTPWriteTimeout int
-	CertFile        string
-	KeyFile         string
-	LogLevel        string
+	CertFile         string
+	KeyFile          string
+	LogLevel         string
 
 	// Routing
 	PathPrefix string

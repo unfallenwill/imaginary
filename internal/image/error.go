@@ -10,17 +10,17 @@ import (
 type Kind int
 
 const (
-	KindUnknown         Kind = iota
-	KindNotFound             // resource not found
-	KindUnauthorized         // authentication failure
-	KindForbidden            // authorization or signature mismatch
-	KindMethodNotAllowed     // wrong HTTP method
-	KindUnsupportedMedia     // image format not supported
-	KindInvalidParam         // missing or malformed parameter
-	KindEmptyBody            // empty or unreadable image data
-	KindResolutionTooBig     // image resolution exceeds limit
-	KindNotImplemented       // endpoint disabled
-	KindProcessing           // error during image processing
+	KindUnknown          Kind = iota
+	KindNotFound              // resource not found
+	KindUnauthorized          // authentication failure
+	KindForbidden             // authorization or signature mismatch
+	KindMethodNotAllowed      // wrong HTTP method
+	KindUnsupportedMedia      // image format not supported
+	KindInvalidParam          // missing or malformed parameter
+	KindEmptyBody             // empty or unreadable image data
+	KindResolutionTooBig      // image resolution exceeds limit
+	KindNotImplemented        // endpoint disabled
+	KindProcessing            // error during image processing
 )
 
 // Error represents a domain-level image processing error.
