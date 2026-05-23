@@ -1,0 +1,71 @@
+# imaginary example configuration
+# Copy to $HOME/.config/imaginary/config.yaml or use -config path
+
+# Server
+addr: ""
+port: 8088
+path_prefix: "/"
+
+# CORS
+cors: false
+
+# Logging
+log_level: info
+
+# Timeouts (seconds)
+http_read_timeout: 60
+http_write_timeout: 60
+
+# Caching
+http_cache_ttl: -1
+
+# Rate limiting
+concurrency: 0
+burst: 100
+
+# Authorization
+api_key: ""
+
+# TLS
+certfile: ""
+keyfile: ""
+
+# URL image source
+enable_url_source: false
+enable_auth_forwarding: false
+authorization: ""
+forward_headers: ""
+allowed_origins: ""
+max_allowed_size: 0
+max_allowed_pixels: 18.0
+
+# URL signature
+enable_url_signature: false
+url_signature_key: ""
+
+# Local filesystem
+mount: ""
+
+# Placeholder
+enable_placeholder: false
+placeholder: ""
+placeholder_status: 0
+
+# Endpoints
+disable_endpoints: ""
+
+# Resource management
+cpus: 0
+mrelease: 30
+return_size: false
+
+# Object storage
+storage:
+  type: s3-compatible
+  bucket: ""
+  region: ""
+  endpoint: ""
+  access_key: ${ACCESS_KEY}
+  secret_key: ${SECRET_KEY}
+  force_path_style: false
+  key_prefix: ""

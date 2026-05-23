@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -16,7 +17,7 @@ import (
 )
 
 // CLIConfig holds all configuration parsed from command-line flags,
-// environment variables, and optional JSON config file.
+// environment variables, and optional YAML config file.
 type CLIConfig struct {
 	// Meta
 	ShowHelp    bool
@@ -106,7 +107,8 @@ func DefaultConfig() CLIConfig {
 	}
 }
 
-// Parse parses command-line flags and environment variables into a CLIConfig.
+// Parse parses command-line flags, config file, and environment variables into a CLIConfig.
+// Priority: code defaults < config file < CLI flags < env vars.
 func Parse(args []string) (CLIConfig, error) {
 	cfg := DefaultConfig()
 
@@ -148,10 +150,30 @@ func Parse(args []string) (CLIConfig, error) {
 	fs.IntVar(&cfg.CPUs, "cpus", cfg.CPUs, "Number of CPU cores to use")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info, warning, error")
 	fs.BoolVar(&cfg.ReturnSize, "return-size", cfg.ReturnSize, "Return image size in HTTP headers")
-	fs.StringVar(&cfg.ConfigFile, "config", cfg.ConfigFile, "JSON config file path")
+	fs.StringVar(&cfg.ConfigFile, "config", cfg.ConfigFile, "YAML config file path")
 
 	if err := fs.Parse(args); err != nil {
 		return CLIConfig{}, err
+	}
+
+	// Collect explicitly set CLI flags.
+	explicit := make(map[string]struct{})
+	fs.Visit(func(f *flag.Flag) {
+		explicit[f.Name] = struct{}{}
+	})
+
+	// Determine config file path: -config flag > default path.
+	configPath := cfg.ConfigFile
+	if configPath == "" {
+		configPath = defaultConfigPath()
+	}
+
+	if configPath != "" {
+		fileCfg, err := LoadFile(configPath)
+		if err != nil {
+			return CLIConfig{}, fmt.Errorf("cannot load config file: %w", err)
+		}
+		applyFileOverrides(&cfg, fileCfg, explicit)
 	}
 
 	cfg.applyEnvOverrides()
@@ -159,6 +181,111 @@ func Parse(args []string) (CLIConfig, error) {
 	cfg.AllowedOrigins = parseOrigins(cfg.allowedOriginsRaw)
 
 	return cfg, nil
+}
+
+// defaultConfigPath returns the default config file path if it exists.
+func defaultConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	p := filepath.Join(home, ".config", "imaginary", "config.yaml")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return ""
+}
+
+// applyFileOverrides applies FileConfig values to CLIConfig for fields not
+// explicitly set via CLI flags.
+func applyFileOverrides(cfg *CLIConfig, f FileConfig, explicit map[string]struct{}) {
+	setString := func(flagName string, val *string, dst *string) {
+		if val != nil {
+			if _, ok := explicit[flagName]; !ok {
+				*dst = *val
+			}
+		}
+	}
+	setInt := func(flagName string, val *int, dst *int) {
+		if val != nil {
+			if _, ok := explicit[flagName]; !ok {
+				*dst = *val
+			}
+		}
+	}
+	setBool := func(flagName string, val *bool, dst *bool) {
+		if val != nil {
+			if _, ok := explicit[flagName]; !ok {
+				*dst = *val
+			}
+		}
+	}
+	setFloat64 := func(flagName string, val *float64, dst *float64) {
+		if val != nil {
+			if _, ok := explicit[flagName]; !ok {
+				*dst = *val
+			}
+		}
+	}
+
+	// Network
+	setString("a", f.Addr, &cfg.Addr)
+	setInt("p", f.Port, &cfg.Port)
+	setString("certfile", f.CertFile, &cfg.CertFile)
+	setString("keyfile", f.KeyFile, &cfg.KeyFile)
+
+	// Timeouts
+	setInt("http-read-timeout", f.HTTPReadTimeout, &cfg.HTTPReadTimeout)
+	setInt("http-write-timeout", f.HTTPWriteTimeout, &cfg.HTTPWriteTimeout)
+
+	// Logging
+	setString("log-level", f.LogLevel, &cfg.LogLevel)
+
+	// Routing
+	setString("path-prefix", f.PathPrefix, &cfg.PathPrefix)
+
+	// Middleware
+	setBool("cors", f.CORS, &cfg.CORS)
+	setString("key", f.APIKey, &cfg.APIKey)
+	setInt("concurrency", f.Concurrency, &cfg.Concurrency)
+	setInt("burst", f.Burst, &cfg.Burst)
+
+	// Caching
+	setInt("http-cache-ttl", f.HTTPCacheTTL, &cfg.HTTPCacheTTL)
+
+	// URL source
+	setBool("enable-url-source", f.EnableURLSource, &cfg.EnableURLSource)
+	setBool("enable-auth-forwarding", f.AuthForwarding, &cfg.AuthForwarding)
+	setString("authorization", f.Authorization, &cfg.Authorization)
+	setString("forward-headers", f.ForwardHeaders, &cfg.forwardHeadersRaw)
+	setString("allowed-origins", f.AllowedOrigins, &cfg.allowedOriginsRaw)
+	setInt("max-allowed-size", f.MaxAllowedSize, &cfg.MaxAllowedSize)
+	setFloat64("max-allowed-resolution", f.MaxAllowedPixels, &cfg.MaxAllowedPixels)
+	setBool("enable-url-signature", f.EnableURLSignature, &cfg.EnableURLSignature)
+	setString("url-signature-key", f.URLSignatureKey, &cfg.URLSignatureKey)
+
+	// Filesystem
+	setString("mount", f.Mount, &cfg.Mount)
+
+	// Endpoints
+	setString("disable-endpoints", f.DisableEndpoints, &cfg.DisableEndpoints)
+
+	// Placeholder
+	setBool("enable-placeholder", f.EnablePlaceholder, &cfg.EnablePlaceholder)
+	setString("placeholder", f.Placeholder, &cfg.Placeholder)
+	setInt("placeholder-status", f.PlaceholderStatus, &cfg.PlaceholderStatus)
+
+	// Resource management
+	setInt("cpus", f.CPUs, &cfg.CPUs)
+	setInt("mrelease", f.MRelease, &cfg.MRelease)
+
+	// Response
+	setBool("return-size", f.ReturnSize, &cfg.ReturnSize)
+
+	// Storage
+	if f.Storage != nil {
+		cfg.Storage = *f.Storage
+	}
 }
 
 // applyEnvOverrides applies environment variable overrides for select fields.
@@ -210,19 +337,6 @@ func (c CLIConfig) Validate() error {
 		fmt.Println("warning: -gzip flag is deprecated and will not have effect")
 	}
 
-	return nil
-}
-
-// LoadStorage reads the JSON config file and populates Storage options.
-func (c *CLIConfig) LoadStorage() error {
-	if c.ConfigFile == "" {
-		return nil
-	}
-	fileOptions, err := LoadFile(c.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("cannot load config file: %w", err)
-	}
-	c.Storage = fileOptions.Storage
 	return nil
 }
 

@@ -11,6 +11,7 @@ require (
 	github.com/h2non/filetype v1.1.0
 	github.com/rs/cors v0.0.0-20170727213201-7af7a1e09ba3
 	github.com/throttled/throttled/v2 v2.15.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -29,4 +30,5 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/kr/text v0.2.0 // indirect
 )

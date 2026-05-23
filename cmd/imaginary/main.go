@@ -77,7 +77,8 @@ Options:
   -log-level                 Set log level for http-server. E.g: info,warning,error [default: info].
                              Or can use the environment variable GOLANG_LOG=info.
   -return-size               Return the image size with X-Width and X-Height HTTP header. [default: disabled].
-  -config <path>             JSON config file path.
+  -config <path>             YAML config file path.
+                             Default: $HOME/.config/imaginary/config.yaml
 `
 
 func main() {
@@ -104,10 +105,6 @@ func main() {
 
 	if cfg.MRelease > 0 {
 		startMemoryRelease(cfg.MRelease)
-	}
-
-	if err := cfg.LoadStorage(); err != nil {
-		exitWithError(err.Error())
 	}
 
 	placeholderImage, placeholderEnabled, err := cfg.ResolvePlaceholder()

@@ -201,17 +201,18 @@ func TestParseEndpoints(t *testing.T) {
 	}
 }
 
-func TestLoadStorage(t *testing.T) {
+func TestParseConfigFile(t *testing.T) {
 	dir := t.TempDir()
-	configFile := filepath.Join(dir, "config.json")
-	t.Setenv("TEST_STORAGE_SECRET", "secret")
-	if err := os.WriteFile(configFile, []byte(`{
-		"storage": {
-			"type": "s3-compatible",
-			"bucket": "images",
-			"region": "us-east-1"
-		}
-	}`), 0600); err != nil {
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(`
+port: 9090
+cors: true
+log_level: warning
+storage:
+  type: s3-compatible
+  bucket: images
+  region: us-east-1
+`), 0600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -219,14 +220,97 @@ func TestLoadStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := cfg.LoadStorage(); err != nil {
-		t.Fatal(err)
+	if cfg.Port != 9090 {
+		t.Fatalf("expected port 9090, got %d", cfg.Port)
+	}
+	if !cfg.CORS {
+		t.Fatal("expected cors true")
+	}
+	if cfg.LogLevel != "warning" {
+		t.Fatalf("expected log level warning, got %s", cfg.LogLevel)
 	}
 	if cfg.Storage.Type != "s3-compatible" {
 		t.Fatalf("expected s3-compatible, got %s", cfg.Storage.Type)
 	}
 	if cfg.Storage.Bucket != "images" {
 		t.Fatalf("expected images, got %s", cfg.Storage.Bucket)
+	}
+}
+
+func TestParseCLIOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(`
+port: 9090
+cors: true
+`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Parse([]string{"-config", configFile, "-p", "7070"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// CLI flag should override config file
+	if cfg.Port != 7070 {
+		t.Fatalf("expected port 7070 from CLI, got %d", cfg.Port)
+	}
+	// Config file value should apply when no CLI flag
+	if !cfg.CORS {
+		t.Fatal("expected cors true from config file")
+	}
+}
+
+func TestParseEnvOverridesFile(t *testing.T) {
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "config.yaml")
+	t.Setenv("PORT", "6060")
+	t.Setenv("GOLANG_LOG", "error")
+
+	if err := os.WriteFile(configFile, []byte(`
+port: 9090
+log_level: warning
+`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Parse([]string{"-config", configFile})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Env var should override config file
+	if cfg.Port != 6060 {
+		t.Fatalf("expected port 6060 from env, got %d", cfg.Port)
+	}
+	if cfg.LogLevel != "error" {
+		t.Fatalf("expected log level error from env, got %s", cfg.LogLevel)
+	}
+}
+
+func TestParsePriorityChain(t *testing.T) {
+	// Tests: defaults < config file < CLI flags < env vars
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "config.yaml")
+	t.Setenv("PORT", "5050")
+
+	if err := os.WriteFile(configFile, []byte(`
+port: 9090
+cors: true
+`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Parse([]string{"-config", configFile, "-cors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Default: 8088 < File: 9090 < CLI: not set for port < Env: 5050
+	if cfg.Port != 5050 {
+		t.Fatalf("expected port 5050 from env (highest priority), got %d", cfg.Port)
+	}
+	// CORS from file is true, CLI also sets it (no conflict)
+	if !cfg.CORS {
+		t.Fatal("expected cors true")
 	}
 }
 

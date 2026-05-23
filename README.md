@@ -898,27 +898,33 @@ Example:
 curl -o image.webp 'http://localhost:9000/thumbnail/720x405q80.webp/uploads/2026/05/image.jpg?embed=true'
 ```
 
-Configure an S3-compatible storage provider with a JSON config file:
+Configure imaginary with a YAML config file. The default config path is
+`$HOME/.config/imaginary/config.yaml` (loaded automatically if the file exists).
+You can also specify a custom path with `-config`.
 
-```json
-{
-  "storage": {
-    "type": "s3-compatible",
-    "bucket": "your-bucket",
-    "region": "ap-shanghai",
-    "endpoint": "https://cos.ap-shanghai.myqcloud.com",
-    "access_key": "${ACCESS_KEY}",
-    "secret_key": "${SECRET_KEY}",
-    "force_path_style": false,
-    "key_prefix": ""
-  }
-}
+Priority: code defaults < config file < CLI flags < environment variables.
+
+```yaml
+port: 8088
+cors: true
+concurrency: 10
+enable_url_source: true
+
+storage:
+  type: s3-compatible
+  bucket: your-bucket
+  region: ap-shanghai
+  endpoint: https://cos.ap-shanghai.myqcloud.com
+  access_key: ${ACCESS_KEY}
+  secret_key: ${SECRET_KEY}
+  force_path_style: false
+  key_prefix: ""
 ```
 
 Start imaginary with the config file:
 
 ```bash
-imaginary -config ./imaginary.json
+imaginary -config ./imaginary.yaml
 ```
 
 The configured object storage can also be used with existing image APIs via the `object`
