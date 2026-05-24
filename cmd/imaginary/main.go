@@ -69,8 +69,8 @@ Options:
   -authorization <value>     Defines a constant Authorization header value passed to all the image source servers. -enable-url-source flag must be defined. This overwrites authorization headers forwarding behavior via X-Forward-Authorization
   -placeholder <path>        Image path to image custom placeholder to be used in case of error. Recommended minimum image size is: 1200x1200
   -placeholder-status <code> HTTP status returned when use -placeholder flag
-  -concurrency <num>         Throttle concurrency limit per second [default: disabled]
-  -burst <num>               Throttle burst max cache size [default: 100]
+  -concurrency <num>         Max concurrent image processing requests [default: disabled]
+  -burst <num>               (deprecated, ignored) Throttle burst max cache size [default: 100]
   -mrelease <num>            OS memory release interval in seconds [default: 30]
   -cpus <num>                Number of used cpu cores.
                              (default for current machine is %d cores)
