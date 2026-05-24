@@ -33,8 +33,21 @@ jobs:
         with:
           version: v2.12.2
 
+      - name: Vulnerability check
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Architecture check
+        run: |
+          go install github.com/fe3dback/go-arch-lint@latest
+          go-arch-lint check
+
       - name: Test
         run: make race
+
+      - name: Coverage check
+        run: make cover-check
 
       - name: Build
         run: make build

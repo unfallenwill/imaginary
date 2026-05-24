@@ -10,6 +10,53 @@ linters:
     - ineffassign
     - unconvert
     - misspell
+    - depguard
+    - gocyclo
+    - gocognit
+    - dupl
+
+  settings:
+    depguard:
+      rules:
+        # image 包是纯领域层，不允许依赖任何 I/O 或传输层
+        image-domain:
+          files:
+            - "internal/image/**/*.go"
+          deny:
+            - pkg: "net/http"
+              desc: "image 包不允许直接使用 net/http，HTTP 逻辑属于 server 层"
+            - pkg: "github.com/h2non/imaginary/internal/server"
+              desc: "image 领域层不能依赖 server 传输层"
+            - pkg: "github.com/h2non/imaginary/internal/source"
+              desc: "image 领域层不能依赖 source 数据源层"
+            - pkg: "github.com/h2non/imaginary/internal/storage"
+              desc: "image 领域层不能依赖 storage 存储层"
+
+        # source 数据源层不能反向依赖 server 传输层
+        source-no-server:
+          files:
+            - "internal/source/**/*.go"
+          deny:
+            - pkg: "github.com/h2non/imaginary/internal/server"
+              desc: "source 数据源层不能依赖 server 传输层"
+
+        # storage 存储层不能依赖 server 传输层
+        storage-no-server:
+          files:
+            - "internal/storage/**/*.go"
+          deny:
+            - pkg: "github.com/h2non/imaginary/internal/server"
+              desc: "storage 存储层不能依赖 server 传输层"
+
+    gocyclo:
+      min-complexity: 15
+
+    gocognit:
+      min-complexity: 20
+
+    dupl:
+      threshold: 100
+
   exclusions:
     rules:
       # Tests commonly use variable URLs and file paths.
@@ -21,6 +68,12 @@ linters:
         text: "G304:"
         linters:
           - gosec
+      # Test files are allowed to have higher complexity and duplication.
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - gocognit
+          - dupl
 
 issues:
   max-issues-per-linter: 0

@@ -33,10 +33,27 @@ cover:
 	go test -coverprofile=coverage.out $(GO_PACKAGES)
 	go tool cover -func=coverage.out
 
+COVER_THRESHOLD=50
+
+cover-check:
+	@echo "$(OK_COLOR)==> Checking test coverage (threshold: $(COVER_THRESHOLD)%)$(NO_COLOR)"
+	@go test -coverprofile=coverage.out $(GO_PACKAGES) 2>&1 | grep -E "^(ok|FAIL|---)" > /dev/null; \
+	if [ ! -f coverage.out ]; then echo "Error: coverage.out not generated"; exit 1; fi; \
+	COVERAGE=$$(go tool cover -func=coverage.out | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	echo "Total coverage: $${COVERAGE}%"; \
+	if [ "$$(echo "$$COVERAGE < $(COVER_THRESHOLD)" | bc -l)" = "1" ]; then \
+		echo "Coverage $${COVERAGE}% is below threshold $(COVER_THRESHOLD)%"; \
+		exit 1; \
+	fi; \
+	echo "$(OK_COLOR)Coverage check passed$(NO_COLOR)"
+
 vuln:
 	govulncheck $(GO_PACKAGES)
 
-quality: fmt-check tidy-check vet lint race build
+arch:
+	go-arch-lint check
+
+quality: fmt-check tidy-check vet lint arch race build
 
 release-check: quality vuln docker-build
 
@@ -56,4 +73,4 @@ docker-push:
 
 docker: docker-build docker-push
 
-.PHONY: build fmt fmt-check tidy-check vet lint test race cover vuln quality release-check install benchmark docker-build docker-push docker
+.PHONY: build fmt fmt-check tidy-check vet lint arch test race cover cover-check vuln quality release-check install benchmark docker-build docker-push docker

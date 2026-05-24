@@ -1,0 +1,38 @@
+version: 3
+workdir: .
+
+allow:
+  depOnAnyVendor: true
+  deepScan: true
+
+excludeFiles:
+  - ".*_test\\.go$"
+
+components:
+  cmd:       { in: cmd/** }
+  config:    { in: internal/config }
+  domain:    { in: internal/image }
+  server:    { in: internal/server }
+  source:    { in: internal/source/** }
+  storage:   { in: internal/storage }
+  version:   { in: internal/version }
+
+commonComponents:
+  - domain
+  - source
+  - version
+
+deps:
+  cmd:
+    mayDependOn:
+      - config
+      - server
+      - storage
+
+  config:
+    mayDependOn:
+      - server
+
+  storage:
+    mayDependOn:
+      - config
