@@ -2,11 +2,7 @@ package objectsource
 
 import (
 	"context"
-	"io"
 	"net/http"
-	"path"
-	"strings"
-	"time"
 
 	"github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
@@ -14,7 +10,6 @@ import (
 
 const ImageSourceTypeObject source.ImageSourceType = "object"
 const ObjectQueryKey = "object"
-const ObjectStorageTimeout = 30 * time.Second
 
 type ObjectImageSource struct {
 	Config *source.SourceConfig
@@ -34,11 +29,11 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	}
 
 	key := r.URL.Query().Get(ObjectQueryKey)
-	if err := ValidateObjectKey(key); err != nil {
+	if err := source.ValidateObjectKey(key); err != nil {
 		return nil, image.ErrInvalidFilePath
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), ObjectStorageTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), source.ObjectStorageTimeout)
 	defer cancel()
 
 	body, contentLength, err := s.Config.ObjectStorage.Open(ctx, key)
@@ -51,7 +46,7 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 		return nil, image.ErrContentTooLarge
 	}
 
-	buf, err := ReadObjectBody(body, s.Config.MaxAllowedSize)
+	buf, err := source.ReadObjectBody(body, s.Config.MaxAllowedSize)
 	if err != nil {
 		return nil, err
 	}
@@ -62,41 +57,14 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	return buf, nil
 }
 
-func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
-	if maxAllowedSize <= 0 {
-		buf, err := io.ReadAll(body)
-		if err != nil {
-			return nil, image.WrapError("error reading object body", image.KindUpstream, err)
-		}
-		return buf, nil
-	}
+// ReadObjectBody delegates to source.ReadObjectBody for backward compatibility.
+// Deprecated: use source.ReadObjectBody directly.
+var ReadObjectBody = source.ReadObjectBody
 
-	limited := io.LimitReader(body, int64(maxAllowedSize)+1)
-	buf, err := io.ReadAll(limited)
-	if err != nil {
-		return nil, image.WrapError("error reading object body", image.KindUpstream, err)
-	}
-	if len(buf) > maxAllowedSize {
-		return nil, image.ErrContentTooLarge
-	}
+// ValidateObjectKey delegates to source.ValidateObjectKey for backward compatibility.
+// Deprecated: use source.ValidateObjectKey directly.
+var ValidateObjectKey = source.ValidateObjectKey
 
-	return buf, nil
-}
-
-func ValidateObjectKey(key string) error {
-	if key == "" || strings.Contains(key, "\\") {
-		return image.ErrInvalidFilePath
-	}
-	for _, segment := range strings.Split(key, "/") {
-		if segment == "." || segment == ".." {
-			return image.ErrInvalidFilePath
-		}
-	}
-
-	cleaned := path.Clean("/" + key)
-	if cleaned == "/" {
-		return image.ErrInvalidFilePath
-	}
-
-	return nil
-}
+// ObjectStorageTimeout delegates to source.ObjectStorageTimeout for backward compatibility.
+// Deprecated: use source.ObjectStorageTimeout directly.
+const ObjectStorageTimeout = source.ObjectStorageTimeout

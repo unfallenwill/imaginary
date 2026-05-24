@@ -5,6 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path"
+	"strings"
+	"time"
+
+	"github.com/h2non/imaginary/internal/image"
 )
 
 // HTTPClient is the interface for HTTP clients used by source implementations.
@@ -60,4 +65,49 @@ func (r *Resolver) Match(req *http.Request) ImageSource {
 		}
 	}
 	return nil
+}
+
+// ObjectStorageTimeout is the default timeout for object storage operations.
+const ObjectStorageTimeout = 30 * time.Second
+
+// ValidateObjectKey checks that an object storage key is safe to use.
+func ValidateObjectKey(key string) error {
+	if key == "" || strings.Contains(key, "\\") {
+		return image.ErrInvalidFilePath
+	}
+	for _, segment := range strings.Split(key, "/") {
+		if segment == "." || segment == ".." {
+			return image.ErrInvalidFilePath
+		}
+	}
+
+	cleaned := path.Clean("/" + key)
+	if cleaned == "/" {
+		return image.ErrInvalidFilePath
+	}
+
+	return nil
+}
+
+// ReadObjectBody reads the full body from an object storage reader,
+// enforcing an optional maximum size limit.
+func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
+	if maxAllowedSize <= 0 {
+		buf, err := io.ReadAll(body)
+		if err != nil {
+			return nil, image.WrapError("error reading object body", image.KindUpstream, err)
+		}
+		return buf, nil
+	}
+
+	limited := io.LimitReader(body, int64(maxAllowedSize)+1)
+	buf, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, image.WrapError("error reading object body", image.KindUpstream, err)
+	}
+	if len(buf) > maxAllowedSize {
+		return nil, image.ErrContentTooLarge
+	}
+
+	return buf, nil
 }

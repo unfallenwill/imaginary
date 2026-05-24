@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	img "github.com/h2non/imaginary/internal/image"
-	objectsource "github.com/h2non/imaginary/internal/source/object"
+	"github.com/h2non/imaginary/internal/source"
 )
 
 type pathThumbnailParams struct {
@@ -46,7 +46,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), objectsource.ObjectStorageTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), source.ObjectStorageTimeout)
 		defer cancel()
 
 		body, contentLength, err := cfg.ObjectStorage.Open(ctx, params.Key)
@@ -61,7 +61,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		buf, err := objectsource.ReadObjectBody(body, cfg.MaxAllowedSize)
+		buf, err := source.ReadObjectBody(body, cfg.MaxAllowedSize)
 		if err != nil {
 			replyError(w, r, err, img.KindUpstream, cfg)
 			return
@@ -121,7 +121,7 @@ func parsePathThumbnailParams(requestPath, prefix string) (pathThumbnailParams, 
 	if err != nil {
 		return params, err
 	}
-	if err := objectsource.ValidateObjectKey(parts[1]); err != nil {
+	if err := source.ValidateObjectKey(parts[1]); err != nil {
 		return params, err
 	}
 
