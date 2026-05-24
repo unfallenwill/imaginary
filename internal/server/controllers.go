@@ -21,12 +21,6 @@ import (
 	"github.com/h2non/imaginary/internal/version"
 )
 
-// remoteClient is the HTTP client for fetching remote resources (e.g. watermark images).
-// It has a built-in timeout as a safety net; per-request context deadlines provide the primary cutoff.
-var remoteClient = &http.Client{
-	Timeout: 15 * time.Second,
-}
-
 func indexController(prefix string, errCfg ErrorConfig) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != path.Join(prefix, "/") {
@@ -61,12 +55,7 @@ func imageController(cfg Config, resolver *source.Resolver, operation img.Operat
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			var imgErr *img.Error
-			if errors.As(err, &imgErr) {
-				ErrorReply(w, req, imgErr, cfg.Error)
-			} else {
-				ErrorReply(w, req, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
-			}
+			replyError(w, req, err, img.KindUpstream, cfg)
 			return
 		}
 
@@ -148,9 +137,9 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	// Resolve watermark image URL to bytes before entering the pure domain layer.
 	// The image package must never perform I/O — all network calls happen here.
 	if opts.Image != "" && len(opts.ImageBytes) == 0 {
-		imageBytes, err := fetchRemoteImage(r.Context(), opts.Image, cfg.MaxAllowedSize)
+		imageBytes, err := fetchRemoteImage(cfg.RemoteClient, r.Context(), opts.Image, cfg.MaxAllowedSize)
 		if err != nil {
-			ErrorReply(w, r, img.WrapError("Unable to fetch watermark image", img.KindInvalidParam, err), cfg.Error)
+			replyError(w, r, err, img.KindUpstream, cfg)
 			return
 		}
 		opts.ImageBytes = imageBytes
@@ -160,9 +149,9 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	// image URLs resolved to bytes before execution.
 	for i := range opts.Operations {
 		if opts.Operations[i].Name == "watermarkImage" && opts.Operations[i].Params.Image != "" {
-			imageBytes, err := fetchRemoteImage(r.Context(), opts.Operations[i].Params.Image, cfg.MaxAllowedSize)
+			imageBytes, err := fetchRemoteImage(cfg.RemoteClient, r.Context(), opts.Operations[i].Params.Image, cfg.MaxAllowedSize)
 			if err != nil {
-				ErrorReply(w, r, img.WrapError("Unable to fetch watermark image", img.KindInvalidParam, err), cfg.Error)
+				replyError(w, r, err, img.KindUpstream, cfg)
 				return
 			}
 			opts.Operations[i].Params.ImageBytes = imageBytes
@@ -238,26 +227,37 @@ func formController(prefix string) func(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// replyError writes an error reply, transparently passing through *image.Error.
+// Non-image errors are wrapped with the given kind.
+func replyError(w http.ResponseWriter, r *http.Request, err error, kind img.Kind, cfg Config) {
+	var imgErr *img.Error
+	if errors.As(err, &imgErr) {
+		ErrorReply(w, r, imgErr, cfg.Error)
+	} else {
+		ErrorReply(w, r, img.WrapError(err.Error(), kind, err), cfg.Error)
+	}
+}
+
 // fetchRemoteImage downloads an image from a URL with proper context propagation,
 // timeout, and size limits. This is the only place in the server where outbound
 // HTTP requests for watermark images are made.
-func fetchRemoteImage(ctx context.Context, imageURL string, maxAllowedSize int) ([]byte, error) {
+func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string, maxAllowedSize int) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("invalid watermark URL: %w", err)
+		return nil, img.WrapError("invalid watermark URL", img.KindInvalidParam, err)
 	}
 
-	resp, err := remoteClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("fetch failed: %w", err)
+		return nil, img.WrapError("fetch failed", img.KindUpstream, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("remote returned status %d", resp.StatusCode)
+		return nil, img.NewError(fmt.Sprintf("remote returned status %d", resp.StatusCode), img.KindUpstream)
 	}
 
 	var reader io.Reader = resp.Body
@@ -269,10 +269,10 @@ func fetchRemoteImage(ctx context.Context, imageURL string, maxAllowedSize int) 
 
 	buf, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, fmt.Errorf("read body: %w", err)
+		return nil, img.WrapError("read body", img.KindUpstream, err)
 	}
 	if len(buf) == 0 {
-		return nil, fmt.Errorf("empty response body")
+		return nil, img.ErrEmptyBody
 	}
 
 	return buf, nil

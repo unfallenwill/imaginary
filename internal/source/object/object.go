@@ -2,7 +2,6 @@ package objectsource
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -44,12 +43,12 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 
 	body, contentLength, err := s.Config.ObjectStorage.Open(ctx, key)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching remote object: %v", err)
+		return nil, image.WrapError("error fetching remote object", image.KindUpstream, err)
 	}
 	defer func() { _ = body.Close() }()
 
 	if s.Config.MaxAllowedSize > 0 && contentLength > int64(s.Config.MaxAllowedSize) {
-		return nil, fmt.Errorf("object size %d exceeds maximum allowed %d bytes", contentLength, s.Config.MaxAllowedSize)
+		return nil, image.ErrContentTooLarge
 	}
 
 	buf, err := ReadObjectBody(body, s.Config.MaxAllowedSize)
@@ -65,16 +64,20 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 
 func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 	if maxAllowedSize <= 0 {
-		return io.ReadAll(body)
+		buf, err := io.ReadAll(body)
+		if err != nil {
+			return nil, image.WrapError("error reading object body", image.KindUpstream, err)
+		}
+		return buf, nil
 	}
 
 	limited := io.LimitReader(body, int64(maxAllowedSize)+1)
 	buf, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, err
+		return nil, image.WrapError("error reading object body", image.KindUpstream, err)
 	}
 	if len(buf) > maxAllowedSize {
-		return nil, fmt.Errorf("object body exceeds maximum allowed %d bytes", maxAllowedSize)
+		return nil, image.ErrContentTooLarge
 	}
 
 	return buf, nil
@@ -82,17 +85,17 @@ func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 
 func ValidateObjectKey(key string) error {
 	if key == "" || strings.Contains(key, "\\") {
-		return fmt.Errorf("invalid object key")
+		return image.ErrInvalidFilePath
 	}
 	for _, segment := range strings.Split(key, "/") {
 		if segment == "." || segment == ".." {
-			return fmt.Errorf("invalid object key")
+			return image.ErrInvalidFilePath
 		}
 	}
 
 	cleaned := path.Clean("/" + key)
 	if cleaned == "/" {
-		return fmt.Errorf("invalid object key")
+		return image.ErrInvalidFilePath
 	}
 
 	return nil

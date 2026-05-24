@@ -7,6 +7,12 @@ import (
 	"net/url"
 )
 
+// HTTPClient is the interface for HTTP clients used by source implementations.
+// This allows dependency injection for testing.
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 // ObjectStorage represents a configured object storage backend.
 // Defined here at the consumer, following Go's "define interfaces where they're used" principle.
 type ObjectStorage interface {
@@ -25,6 +31,7 @@ type SourceConfig struct {
 	AllowedOrigins []*url.URL
 	MaxAllowedSize int
 	ObjectStorage  ObjectStorage
+	HTTPClient     HTTPClient
 }
 
 type ImageSource interface {

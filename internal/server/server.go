@@ -54,9 +54,20 @@ type Config struct {
 
 	// Source resolver (wired externally)
 	Resolver *source.Resolver
+
+	// HTTP client for fetching remote resources (e.g. watermark images).
+	// If nil, a default client with a 15s timeout is used.
+	RemoteClient *http.Client
 }
 
 func Server(cfg Config) {
+	if cfg.RemoteClient == nil {
+		cfg.RemoteClient = &http.Client{
+			Timeout: 15 * time.Second,
+		}
+	}
+	InitStartTime()
+
 	addr := cfg.Addr + ":" + strconv.Itoa(cfg.Port)
 	handler := NewLog(NewServerMux(cfg), os.Stdout, cfg.LogLevel)
 

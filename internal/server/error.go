@@ -30,7 +30,8 @@ var kindToHTTP = map[img.Kind]int{
 	img.KindEmptyBody:        http.StatusBadRequest,
 	img.KindResolutionTooBig: http.StatusUnprocessableEntity,
 	img.KindNotImplemented:   http.StatusNotImplemented,
-	img.KindProcessing:       http.StatusBadRequest,
+	img.KindProcessing:       http.StatusInternalServerError,
+	img.KindUpstream:         http.StatusBadGateway,
 }
 
 // httpStatusFor maps an *image.Error's Kind to an HTTP status code.

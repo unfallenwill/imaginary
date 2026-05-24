@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -67,7 +66,7 @@ func (s *FileSystemImageSource) read(file string) ([]byte, error) {
 func (s *FileSystemImageSource) getFileParam(r *http.Request) (string, error) {
 	unescaped, err := url.QueryUnescape(r.URL.Query().Get("file"))
 	if err != nil {
-		return "", fmt.Errorf("failed to unescape file param: %w", err)
+		return "", image.WrapError("failed to unescape file param", image.KindInvalidParam, err)
 	}
 
 	return unescaped, nil

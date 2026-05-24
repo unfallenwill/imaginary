@@ -38,7 +38,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 
 		params, err := parsePathThumbnailParams(r.URL.Path, cfg.PathPrefix)
 		if err != nil {
-			ErrorReply(w, r, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
+			replyError(w, r, err, img.KindInvalidParam, cfg)
 			return
 		}
 		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/1000000 > cfg.MaxAllowedPixels {
@@ -51,7 +51,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 
 		body, contentLength, err := cfg.ObjectStorage.Open(ctx, params.Key)
 		if err != nil {
-			ErrorReply(w, r, img.WrapError("Error while fetching object", img.KindInvalidParam, err), cfg.Error)
+			ErrorReply(w, r, img.WrapError("Error while fetching object", img.KindUpstream, err), cfg.Error)
 			return
 		}
 		defer func() { _ = body.Close() }()
@@ -63,7 +63,7 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 
 		buf, err := objectsource.ReadObjectBody(body, cfg.MaxAllowedSize)
 		if err != nil {
-			ErrorReply(w, r, img.WrapError(err.Error(), img.KindInvalidParam, err), cfg.Error)
+			replyError(w, r, err, img.KindUpstream, cfg)
 			return
 		}
 		if len(buf) == 0 {

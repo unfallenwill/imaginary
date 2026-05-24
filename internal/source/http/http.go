@@ -17,12 +17,6 @@ import (
 const ImageSourceTypeHTTP source.ImageSourceType = "http"
 const URLQueryKey = "url"
 
-// upstreamClient is the shared HTTP client for fetching remote images.
-// It has a reasonable timeout and is safe for concurrent use.
-var upstreamClient = &http.Client{
-	Timeout: 30 * time.Second,
-}
-
 type HTTPImageSource struct {
 	Config *source.SourceConfig
 }
@@ -35,48 +29,65 @@ func (s *HTTPImageSource) Matches(r *http.Request) bool {
 	return r.Method == http.MethodGet && r.URL.Query().Get(URLQueryKey) != ""
 }
 
+func (s *HTTPImageSource) httpClient() source.HTTPClient {
+	if s.Config.HTTPClient != nil {
+		return s.Config.HTTPClient
+	}
+	return defaultHTTPClient
+}
+
+var defaultHTTPClient = &http.Client{
+	Timeout: 30 * time.Second,
+}
+
 func (s *HTTPImageSource) GetImage(req *http.Request) ([]byte, error) {
 	u, err := parseURL(req)
 	if err != nil {
 		return nil, image.ErrInvalidImageURL
 	}
 	if shouldRestrictOrigin(u, s.Config.AllowedOrigins) {
-		return nil, fmt.Errorf("not allowed remote URL origin: %s%s", u.Host, u.Path)
+		return nil, image.ErrOriginNotAllowed
 	}
 	return s.fetchImage(u, req)
 }
 
 func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, error) {
 	if s.Config.MaxAllowedSize > 0 {
-		req := newHTTPRequest(s, ireq, http.MethodHead, url)
-		res, err := upstreamClient.Do(req)
+		req, err := newHTTPRequest(s, ireq, http.MethodHead, url)
 		if err != nil {
-			return nil, fmt.Errorf("error fetching remote http image headers: %w", err)
+			return nil, err
+		}
+		res, err := s.httpClient().Do(req)
+		if err != nil {
+			return nil, image.WrapError("error fetching remote http image headers", image.KindUpstream, err)
 		}
 		_ = res.Body.Close()
 		if res.StatusCode < 200 || res.StatusCode > 206 {
-			return nil, image.NewError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindProcessing)
+			return nil, image.NewError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindUpstream)
 		}
 
 		contentLength, _ := strconv.Atoi(res.Header.Get("Content-Length"))
 		if contentLength > s.Config.MaxAllowedSize {
-			return nil, fmt.Errorf("Content-Length %d exceeds maximum allowed %d bytes", contentLength, s.Config.MaxAllowedSize)
+			return nil, image.ErrContentTooLarge
 		}
 	}
 
-	req := newHTTPRequest(s, ireq, http.MethodGet, url)
-	res, err := upstreamClient.Do(req)
+	req, err := newHTTPRequest(s, ireq, http.MethodGet, url)
 	if err != nil {
-		return nil, fmt.Errorf("error fetching remote http image: %w", err)
+		return nil, err
+	}
+	res, err := s.httpClient().Do(req)
+	if err != nil {
+		return nil, image.WrapError("error fetching remote http image", image.KindUpstream, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
-		return nil, image.NewError(fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindProcessing)
+		return nil, image.NewError(fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()), image.KindUpstream)
 	}
 
 	buf, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, fmt.Errorf("unable to create image from response body: %s (url=%s)", req.URL.String(), err)
+		return nil, image.WrapError(fmt.Sprintf("unable to read image from response body (url=%s)", req.URL.String()), image.KindUpstream, err)
 	}
 	return buf, nil
 }
@@ -107,8 +118,11 @@ func parseURL(request *http.Request) (*url.URL, error) {
 	return url.Parse(request.URL.Query().Get(URLQueryKey))
 }
 
-func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) *http.Request {
-	req, _ := http.NewRequestWithContext(ireq.Context(), method, url.String(), nil)
+func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ireq.Context(), method, url.String(), nil)
+	if err != nil {
+		return nil, image.WrapError("invalid request URL", image.KindInvalidParam, err)
+	}
 	req.Header.Set("User-Agent", "imaginary/"+version.Version)
 	req.URL = url
 
@@ -120,7 +134,7 @@ func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *
 		s.setAuthorizationHeader(req, ireq)
 	}
 
-	return req
+	return req, nil
 }
 
 func shouldRestrictOrigin(url *url.URL, origins []*url.URL) bool {

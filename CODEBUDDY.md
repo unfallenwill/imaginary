@@ -34,7 +34,10 @@ go test -race -count=1 ./internal/server/...
 
 Run locally (requires libvips):
 ```bash
+# If libvips installed via Homebrew (Linux/macOS):
 LD_LIBRARY_PATH="$(brew --prefix vips)/lib:$LD_LIBRARY_PATH" go run ./cmd/imaginary -p 8088
+# If libvips installed via apt (default library path, no extra config needed):
+go run ./cmd/imaginary -p 8088
 ```
 
 ## Architecture
@@ -74,7 +77,7 @@ Key constraints:
 - **Operation pattern**: `img.Operation` is a `func([]byte, ImageOptions) (Image, error)` — each endpoint maps to one. Defined in `internal/image/image.go`.
 - **Source resolver**: `source.Resolver` tries registered `ImageSource` implementations in order (body → object → fs → http) until one matches the request.
 - **Error model**: `image.Error` uses semantic `Kind` constants (not HTTP status codes). Server layer maps kinds to HTTP statuses via `server/error.go`.
-- **Config priority**: code defaults < YAML config file < CLI flags < environment variables. Config is parsed in `internal/config/config.go`.
+- **Config priority**: code defaults < config file < CLI flags < environment variables. Config is parsed in `internal/config/config.go`. Only 3 env vars override: `PORT`, `URL_SIGNATURE_KEY`, `GOLANG_LOG`. YAML file supports `${ENV_VAR}` interpolation.
 - **ObjectStorage interface**: defined in `internal/source/source.go` at the consumer side (Go convention), implemented by `internal/storage/s3.go`.
 - **Middleware chain**: `server/middleware.go` wraps handlers with endpoint filtering, throttling, CORS, API key auth, cache headers, and URL signature validation.
 
@@ -86,6 +89,14 @@ Key constraints:
 ## Testing
 
 Tests use `net/http/httptest` for HTTP-level integration tests against real libvips image processing. Test data lives in `testdata/`. No external mock frameworks — interfaces are mocked manually (e.g., `fakeObjectStorage`).
+
+## Adding a New Image Operation
+
+1. Add the operation function in `internal/image/image.go` (or a new file): `func MyOp(buf []byte, opts ImageOptions) (Image, error)`
+2. If the operation has query parameters, add parsing in `internal/image/params.go` (`applyQueryParam`)
+3. Register in `OperationsMap` in `internal/image/image.go` (for pipeline support)
+4. Add route in `internal/server/server.go`: `mux.Handle(join(prefix, "/myop"), image(img.MyOp))`
+5. Add test in `internal/image/` (unit) and/or `internal/server/` (HTTP integration)
 
 ## Quality Gates (CI)
 
@@ -99,3 +110,10 @@ CI runs on push/PR to master. Gates in order:
 7. `make race` — tests with race detector
 8. `make cover-check` — coverage threshold (≥50%)
 9. `make build` — compilation check
+
+## Gotchas
+
+- `go-arch-lint`: empty `mayDependOn: []` is invalid — omit the key entirely. `internal/source/**` glob does not match `internal/source` root package; use `[internal/source, internal/source/**]` array syntax.
+- `make cover-check` requires `bc` for float comparison. If `go test` fails, `coverage.out` may not be generated (the script checks for this).
+- golangci-lint v2 config uses `linters.settings` (not `linters-settings`) and `exclusions.rules` (not `exclude-rules`).
+- `go-arch-lint` and `govulncheck` must be installed separately: `go install github.com/fe3dback/go-arch-lint@latest` and `go install golang.org/x/vuln/cmd/govulncheck@latest`.

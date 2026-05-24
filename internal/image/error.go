@@ -21,6 +21,7 @@ const (
 	KindResolutionTooBig      // image resolution exceeds limit
 	KindNotImplemented        // endpoint disabled
 	KindProcessing            // error during image processing
+	KindUpstream              // upstream service (remote HTTP, object storage) error
 )
 
 // Error represents a domain-level image processing error.
@@ -96,4 +97,7 @@ var (
 	ErrInvalidURLSignature  = NewError("Invalid URL signature", KindInvalidParam)
 	ErrURLSignatureMismatch = NewError("URL signature mismatch", KindForbidden)
 	ErrResolutionTooBig     = NewError("Image resolution is too big", KindResolutionTooBig)
+	ErrUpstream             = NewError("Upstream service error", KindUpstream)
+	ErrOriginNotAllowed     = NewError("Remote URL origin not allowed", KindUpstream)
+	ErrContentTooLarge      = NewError("Content size exceeds maximum allowed", KindInvalidParam)
 )

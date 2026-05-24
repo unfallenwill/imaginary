@@ -132,7 +132,7 @@ func TestHttpImageSourceNotAllowedOrigin(t *testing.T) {
 			t.Fatal("Error cannot be empty")
 		}
 
-		if err.Error() != "not allowed remote URL origin: bar.com" {
+		if err.Error() != "Remote URL origin not allowed" {
 			t.Fatalf("Invalid error message: %s", err)
 		}
 	}
@@ -206,7 +206,7 @@ func TestHttpImageSourceNotForwardHeaders(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("Not-Forward") != "" {
 		t.Fatal("Forwarded unspecified header")
@@ -229,7 +229,7 @@ func TestHttpImageSourceForwardedHeadersNotOverride(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("Authorization") != "ValidAPIKey" {
 		t.Fatal("Authorization header override")
@@ -252,7 +252,7 @@ func TestHttpImageSourceCaseSensitivityInForwardedHeaders(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("X-Custom") == "" {
 		t.Fatal("Case sensitive not working on forwarded headers")
@@ -276,9 +276,9 @@ func TestHttpImageSourceEmptyForwardedHeaders(t *testing.T) {
 		t.Fatal("Set empty custom header")
 	}
 
-	oreq := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, err := newHTTPRequest(source, r, http.MethodGet, testURL)
 
-	if oreq == nil {
+	if oreq == nil || err != nil {
 		t.Fatal("Error creating request using empty custom headers")
 	}
 }

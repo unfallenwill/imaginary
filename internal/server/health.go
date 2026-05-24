@@ -3,12 +3,24 @@ package server
 import (
 	"math"
 	"runtime"
+	"sync"
 	"time"
 )
 
-var start = time.Now()
+var (
+	startMu   sync.Once
+	startTime time.Time
+)
 
-const MB float64 = 1.0 * 1024 * 1024
+const mb float64 = 1.0 * 1024 * 1024
+
+// InitStartTime records the server start time.
+// Must be called once when the server starts listening.
+func InitStartTime() {
+	startMu.Do(func() {
+		startTime = time.Now()
+	})
+}
 
 type HealthStats struct {
 	Uptime               int64   `json:"uptime"`
@@ -42,11 +54,11 @@ func GetHealthStats() *HealthStats {
 }
 
 func GetUptime() int64 {
-	return time.Now().Unix() - start.Unix()
+	return time.Now().Unix() - startTime.Unix()
 }
 
 func toMegaBytes(bytes uint64) float64 {
-	return toFixed(float64(bytes)/MB, 2)
+	return toFixed(float64(bytes)/mb, 2)
 }
 
 func round(num float64) int {
