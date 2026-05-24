@@ -11,8 +11,6 @@ import (
 
 	"github.com/h2non/bimg"
 	"github.com/rs/cors"
-	"github.com/throttled/throttled/v2"
-	"github.com/throttled/throttled/v2/store/memstore"
 
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/source"
@@ -63,31 +61,17 @@ func filterEndpoint(next http.Handler, cfg Config) http.Handler {
 	})
 }
 
-func throttleError(err error) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "throttle error: "+err.Error(), http.StatusInternalServerError)
-	})
-}
-
 func throttle(next http.Handler, cfg Config) http.Handler {
-	store, err := memstore.New(65536)
-	if err != nil {
-		return throttleError(err)
-	}
-	wrappedStore := throttled.WrapStoreWithContext(store)
-
-	quota := throttled.RateQuota{MaxRate: throttled.PerSec(cfg.Concurrency), MaxBurst: cfg.Burst}
-	rateLimiter, err := throttled.NewGCRARateLimiterCtx(wrappedStore, quota)
-	if err != nil {
-		return throttleError(err)
-	}
-
-	httpRateLimiter := throttled.HTTPRateLimiterCtx{
-		RateLimiter: rateLimiter,
-		VaryBy:      &throttled.VaryBy{Method: true},
-	}
-
-	return httpRateLimiter.RateLimit(next)
+	sem := make(chan struct{}, cfg.Concurrency)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case sem <- struct{}{}:
+			defer func() { <-sem }()
+			next.ServeHTTP(w, r)
+		case <-r.Context().Done():
+			// Client disconnected while waiting for a slot.
+		}
+	})
 }
 
 func validate(next http.Handler, cfg Config) http.Handler {
