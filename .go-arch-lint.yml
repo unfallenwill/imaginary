@@ -29,10 +29,6 @@ deps:
       - server
       - storage
 
-  config:
-    mayDependOn:
-      - server
-
   storage:
     mayDependOn:
       - config

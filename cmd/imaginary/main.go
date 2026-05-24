@@ -119,9 +119,36 @@ func main() {
 
 	resolver := buildResolver(cfg, objectStorage)
 
-	serverCfg := cfg.ToServerConfig(placeholderImage, placeholderEnabled)
-	serverCfg.ObjectStorage = objectStorage
-	serverCfg.Resolver = resolver
+	serverCfg := server.Config{
+		Addr:               cfg.Addr,
+		Port:               cfg.Port,
+		HTTPReadTimeout:    cfg.HTTPReadTimeout,
+		HTTPWriteTimeout:   cfg.HTTPWriteTimeout,
+		CertFile:           cfg.CertFile,
+		KeyFile:            cfg.KeyFile,
+		LogLevel:           cfg.LogLevel,
+		PathPrefix:         cfg.PathPrefix,
+		CORS:               cfg.CORS,
+		APIKey:             cfg.APIKey,
+		Concurrency:        cfg.Concurrency,
+		Burst:              cfg.Burst,
+		HTTPCacheTTL:       cfg.HTTPCacheTTL,
+		EnableURLSource:    cfg.EnableURLSource,
+		Mount:              cfg.Mount,
+		EnableURLSignature: cfg.EnableURLSignature,
+		URLSignatureKey:    cfg.URLSignatureKey,
+		Endpoints:          server.EndpointSet(cfg.ParseEndpoints()),
+		MaxAllowedPixels:   cfg.MaxAllowedPixels,
+		MaxAllowedSize:     cfg.MaxAllowedSize,
+		ReturnSize:         cfg.ReturnSize,
+		Error: server.ErrorConfig{
+			PlaceholderEnabled: placeholderEnabled,
+			PlaceholderImage:   placeholderImage,
+			PlaceholderStatus:  cfg.PlaceholderStatus,
+		},
+		ObjectStorage: objectStorage,
+		Resolver:      resolver,
+	}
 
 	debug("imaginary server listening on port :%d/%s", serverCfg.Port, strings.TrimPrefix(serverCfg.PathPrefix, "/"))
 

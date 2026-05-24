@@ -13,7 +13,6 @@ import (
 	"github.com/h2non/bimg"
 
 	img "github.com/h2non/imaginary/internal/image"
-	"github.com/h2non/imaginary/internal/server"
 )
 
 // CLIConfig holds all configuration parsed from command-line flags,
@@ -361,51 +360,18 @@ func (c CLIConfig) ResolvePlaceholder() ([]byte, bool, error) {
 	return nil, false, nil
 }
 
-// ParseEndpoints returns a server.EndpointSet from the disable-endpoints string.
-func (c CLIConfig) ParseEndpoints() server.EndpointSet {
+// ParseEndpoints parses the disable-endpoints string into a normalized list.
+func (c CLIConfig) ParseEndpoints() []string {
 	if c.DisableEndpoints == "" {
 		return nil
 	}
-	var endpoints server.EndpointSet
+	var endpoints []string
 	for _, ep := range strings.Split(c.DisableEndpoints, ",") {
 		if norm := strings.ToLower(strings.TrimSpace(ep)); norm != "" {
 			endpoints = append(endpoints, norm)
 		}
 	}
 	return endpoints
-}
-
-// ToServerConfig converts CLIConfig into a server.Config, resolving all
-// runtime dependencies (placeholder image, endpoints).
-func (c CLIConfig) ToServerConfig(placeholderImage []byte, placeholderEnabled bool) server.Config {
-	return server.Config{
-		Addr:               c.Addr,
-		Port:               c.Port,
-		HTTPReadTimeout:    c.HTTPReadTimeout,
-		HTTPWriteTimeout:   c.HTTPWriteTimeout,
-		CertFile:           c.CertFile,
-		KeyFile:            c.KeyFile,
-		LogLevel:           c.LogLevel,
-		PathPrefix:         c.PathPrefix,
-		CORS:               c.CORS,
-		APIKey:             c.APIKey,
-		Concurrency:        c.Concurrency,
-		Burst:              c.Burst,
-		HTTPCacheTTL:       c.HTTPCacheTTL,
-		EnableURLSource:    c.EnableURLSource,
-		Mount:              c.Mount,
-		EnableURLSignature: c.EnableURLSignature,
-		URLSignatureKey:    c.URLSignatureKey,
-		Endpoints:          c.ParseEndpoints(),
-		MaxAllowedPixels:   c.MaxAllowedPixels,
-		MaxAllowedSize:     c.MaxAllowedSize,
-		ReturnSize:         c.ReturnSize,
-		Error: server.ErrorConfig{
-			PlaceholderEnabled: placeholderEnabled,
-			PlaceholderImage:   placeholderImage,
-			PlaceholderStatus:  c.PlaceholderStatus,
-		},
-	}
 }
 
 // stringValue implements flag.Value for a simple string destination.

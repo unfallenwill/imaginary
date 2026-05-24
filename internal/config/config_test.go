@@ -343,20 +343,19 @@ func TestResolvePlaceholderBuiltIn(t *testing.T) {
 	}
 }
 
-func TestToServerConfig(t *testing.T) {
+func TestParsedFieldValues(t *testing.T) {
 	cfg, err := Parse([]string{"-p", "9090", "-cors", "-key", "mykey"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	serverCfg := cfg.ToServerConfig(nil, false)
-	if serverCfg.Port != 9090 {
-		t.Fatalf("expected port 9090, got %d", serverCfg.Port)
+	if cfg.Port != 9090 {
+		t.Fatalf("expected port 9090, got %d", cfg.Port)
 	}
-	if !serverCfg.CORS {
+	if !cfg.CORS {
 		t.Fatal("expected CORS to be true")
 	}
-	if serverCfg.APIKey != "mykey" {
-		t.Fatalf("expected API key mykey, got %s", serverCfg.APIKey)
+	if cfg.APIKey != "mykey" {
+		t.Fatalf("expected API key mykey, got %s", cfg.APIKey)
 	}
 }
 
