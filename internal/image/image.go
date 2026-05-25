@@ -2,7 +2,6 @@ package image
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -57,6 +56,7 @@ type ImageInfo struct {
 	Orientation int    `json:"orientation"`
 }
 
+// Info returns image metadata as JSON.
 func Info(buf []byte, o ImageOptions) (Image, error) {
 	image := Image{Mime: "application/json"}
 
@@ -82,6 +82,7 @@ func Info(buf []byte, o ImageOptions) (Image, error) {
 	return image, nil
 }
 
+// Resize resizes the image to the given width and height.
 func Resize(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 && o.Height == 0 {
 		return Image{}, NewError("Missing required param: height or width", KindInvalidParam)
@@ -97,6 +98,7 @@ func Resize(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Fit resizes the image to fit within the given dimensions while preserving aspect ratio.
 func Fit(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 || o.Height == 0 {
 		return Image{}, NewError("Missing required params: height, width", KindInvalidParam)
@@ -104,7 +106,7 @@ func Fit(buf []byte, o ImageOptions) (Image, error) {
 
 	metadata, err := bimg.Metadata(buf)
 	if err != nil {
-		return Image{}, err
+		return Image{}, WrapError("cannot retrieve image metadata", KindProcessing, err)
 	}
 
 	dims := metadata.Size
@@ -145,6 +147,7 @@ func calculateDestinationFitDimension(imageWidth, imageHeight, fitWidth, fitHeig
 	return fitWidth, fitHeight
 }
 
+// Enlarge resizes the image, allowing upscaling beyond the original dimensions.
 func Enlarge(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 || o.Height == 0 {
 		return Image{}, NewError("Missing required params: height, width", KindInvalidParam)
@@ -160,6 +163,7 @@ func Enlarge(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Extract crops a rectangular area from the image.
 func Extract(buf []byte, o ImageOptions) (Image, error) {
 	if o.AreaWidth == 0 || o.AreaHeight == 0 {
 		return Image{}, NewError("Missing required params: areawidth or areaheight", KindInvalidParam)
@@ -174,6 +178,7 @@ func Extract(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Crop crops the image to the given width and height.
 func Crop(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 && o.Height == 0 {
 		return Image{}, NewError("Missing required param: height or width", KindInvalidParam)
@@ -184,6 +189,7 @@ func Crop(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// SmartCrop crops the image using content-aware smart cropping.
 func SmartCrop(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 && o.Height == 0 {
 		return Image{}, NewError("Missing required param: height or width", KindInvalidParam)
@@ -195,6 +201,7 @@ func SmartCrop(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Rotate rotates the image by the given angle.
 func Rotate(buf []byte, o ImageOptions) (Image, error) {
 	if o.Rotate == 0 {
 		return Image{}, NewError("Missing required param: rotate", KindInvalidParam)
@@ -204,16 +211,17 @@ func Rotate(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// AutoRotate automatically rotates the image based on its EXIF orientation.
 func AutoRotate(buf []byte, o ImageOptions) (out Image, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch value := r.(type) {
 			case error:
-				err = value
+				err = WrapError("libvips processing error", KindProcessing, value)
 			case string:
-				err = errors.New(value)
+				err = NewError(value, KindProcessing)
 			default:
-				err = errors.New("libvips internal error")
+				err = NewError("libvips internal error", KindProcessing)
 			}
 			out = Image{}
 		}
@@ -221,25 +229,28 @@ func AutoRotate(buf []byte, o ImageOptions) (out Image, err error) {
 
 	ibuf, err := bimg.NewImage(buf).AutoRotate()
 	if err != nil {
-		return Image{}, err
+		return Image{}, WrapError("auto-rotate failed", KindProcessing, err)
 	}
 
 	mime := GetImageMimeType(bimg.DetermineImageType(ibuf))
 	return Image{Body: ibuf, Mime: mime}, nil
 }
 
+// Flip flips the image vertically.
 func Flip(buf []byte, o ImageOptions) (Image, error) {
 	opts := BimgOptions(o)
 	opts.Flip = true
 	return Process(buf, opts)
 }
 
+// Flop flips the image horizontally.
 func Flop(buf []byte, o ImageOptions) (Image, error) {
 	opts := BimgOptions(o)
 	opts.Flop = true
 	return Process(buf, opts)
 }
 
+// Thumbnail generates a thumbnail of the image.
 func Thumbnail(buf []byte, o ImageOptions) (Image, error) {
 	if o.Width == 0 && o.Height == 0 {
 		return Image{}, NewError("Missing required params: width or height", KindInvalidParam)
@@ -248,6 +259,7 @@ func Thumbnail(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, BimgOptions(o))
 }
 
+// Zoom zooms the image by the given factor.
 func Zoom(buf []byte, o ImageOptions) (Image, error) {
 	if o.Factor == 0 {
 		return Image{}, NewError("Missing required param: factor", KindInvalidParam)
@@ -274,6 +286,7 @@ func Zoom(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Convert converts the image to the specified output format.
 func Convert(buf []byte, o ImageOptions) (Image, error) {
 	if o.Type == "" {
 		return Image{}, NewError("Missing required param: type", KindInvalidParam)
@@ -286,6 +299,7 @@ func Convert(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Watermark adds a text watermark to the image.
 func Watermark(buf []byte, o ImageOptions) (Image, error) {
 	if o.Text == "" {
 		return Image{}, NewError("Missing required param: text", KindInvalidParam)
@@ -307,6 +321,7 @@ func Watermark(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// WatermarkImage composites a watermark image onto the source image.
 func WatermarkImage(buf []byte, o ImageOptions) (Image, error) {
 	if len(o.ImageBytes) == 0 {
 		return Image{}, NewError("Missing required param: image", KindInvalidParam)
@@ -321,6 +336,7 @@ func WatermarkImage(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// GaussianBlur applies a Gaussian blur to the image.
 func GaussianBlur(buf []byte, o ImageOptions) (Image, error) {
 	if o.Sigma == 0 && o.MinAmpl == 0 {
 		return Image{}, NewError("Missing required param: sigma or minampl", KindInvalidParam)
@@ -329,6 +345,7 @@ func GaussianBlur(buf []byte, o ImageOptions) (Image, error) {
 	return Process(buf, opts)
 }
 
+// Pipeline applies a sequence of image operations.
 func Pipeline(buf []byte, o ImageOptions) (Image, error) {
 	if len(o.Operations) == 0 {
 		return Image{}, NewError("Missing or invalid pipeline operations JSON", KindInvalidParam)
@@ -373,16 +390,17 @@ func Pipeline(buf []byte, o ImageOptions) (Image, error) {
 	return image, err
 }
 
+// Process applies bimg resize options to the image buffer.
 func Process(buf []byte, opts bimg.Options) (out Image, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch value := r.(type) {
 			case error:
-				err = value
+				err = WrapError("libvips processing error", KindProcessing, value)
 			case string:
-				err = errors.New(value)
+				err = NewError(value, KindProcessing)
 			default:
-				err = errors.New("libvips internal error")
+				err = NewError("libvips internal error", KindProcessing)
 			}
 			out = Image{}
 		}
@@ -396,7 +414,7 @@ func Process(buf []byte, opts bimg.Options) (out Image, err error) {
 	}
 
 	if err != nil {
-		return Image{}, err
+		return Image{}, WrapError("error processing image", KindProcessing, err)
 	}
 
 	mime := GetImageMimeType(bimg.DetermineImageType(ibuf))

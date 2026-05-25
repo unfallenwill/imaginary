@@ -15,6 +15,8 @@ import (
 	img "github.com/h2non/imaginary/internal/image"
 )
 
+const maxHTTPCacheTTLSecs = 31_556_926 // ~1 tropical year in seconds (365.2425 days)
+
 // CLIConfig holds all configuration parsed from command-line flags,
 // environment variables, and optional YAML config file.
 type CLIConfig struct {
@@ -318,8 +320,8 @@ func (c CLIConfig) Validate() error {
 	}
 
 	if c.HTTPCacheTTL != -1 {
-		if c.HTTPCacheTTL < 0 || c.HTTPCacheTTL > 31556926 {
-			return fmt.Errorf("the -http-cache-ttl flag only accepts a value from 0 to 31556926")
+		if c.HTTPCacheTTL < 0 || c.HTTPCacheTTL > maxHTTPCacheTTLSecs {
+			return fmt.Errorf("the -http-cache-ttl flag only accepts a value from 0 to %d", maxHTTPCacheTTLSecs)
 		}
 	}
 

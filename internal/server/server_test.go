@@ -58,139 +58,55 @@ func TestIndex(t *testing.T) {
 	}
 }
 
-func TestCrop(t *testing.T) {
-	ts := testServer(controller(image.Crop))
-	buf := readFile("large.jpg")
-	url := ts.URL + "?width=300"
-	defer ts.Close()
-
-	res, err := http.Post(url, "image/jpeg", buf)
-	if err != nil {
-		t.Fatal("Cannot perform the request")
+func TestImageEndpoints(t *testing.T) {
+	cases := []struct {
+		name    string
+		op      image.Operation
+		query   string
+		expectW int
+		expectH int
+	}{
+		{"Crop", image.Crop, "width=300", 300, 1080},
+		{"Resize", image.Resize, "width=300&nocrop=false", 300, 1080},
+		{"Enlarge", image.Enlarge, "width=300&height=200&nocrop=false", 300, 200},
+		{"Extract", image.Extract, "top=100&left=100&areawidth=200&areaheight=120", 200, 120},
 	}
 
-	if res.StatusCode != 200 {
-		t.Fatalf("Invalid response status: %s", res.Status)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := testServer(controller(tc.op))
+			buf := readFile("large.jpg")
+			defer ts.Close()
 
-	if res.Header.Get("Content-Length") == "" {
-		t.Fatal("Empty content length response")
-	}
+			res, err := http.Post(ts.URL+"?"+tc.query, "image/jpeg", buf)
+			if err != nil {
+				t.Fatal("Cannot perform the request")
+			}
 
-	img, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(img) == 0 {
-		t.Fatalf("Empty response body")
-	}
+			if res.StatusCode != 200 {
+				t.Fatalf("Invalid response status: %s", res.Status)
+			}
 
-	err = assertSize(img, 300, 1080)
-	if err != nil {
-		t.Error(err)
-	}
+			if res.Header.Get("Content-Length") == "" {
+				t.Fatal("Empty content length response")
+			}
 
-	if bimg.DetermineImageTypeName(img) != "jpeg" {
-		t.Fatalf("Invalid image type")
-	}
-}
+			img, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(img) == 0 {
+				t.Fatalf("Empty response body")
+			}
 
-func TestResize(t *testing.T) {
-	ts := testServer(controller(image.Resize))
-	buf := readFile("large.jpg")
-	url := ts.URL + "?width=300&nocrop=false"
-	defer ts.Close()
+			if err := assertSize(img, tc.expectW, tc.expectH); err != nil {
+				t.Error(err)
+			}
 
-	res, err := http.Post(url, "image/jpeg", buf)
-	if err != nil {
-		t.Fatal("Cannot perform the request")
-	}
-
-	if res.StatusCode != 200 {
-		t.Fatalf("Invalid response status: %s", res.Status)
-	}
-
-	img, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(img) == 0 {
-		t.Fatalf("Empty response body")
-	}
-
-	err = assertSize(img, 300, 1080)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if bimg.DetermineImageTypeName(img) != "jpeg" {
-		t.Fatalf("Invalid image type")
-	}
-}
-
-func TestEnlarge(t *testing.T) {
-	ts := testServer(controller(image.Enlarge))
-	buf := readFile("large.jpg")
-	url := ts.URL + "?width=300&height=200&nocrop=false"
-	defer ts.Close()
-
-	res, err := http.Post(url, "image/jpeg", buf)
-	if err != nil {
-		t.Fatal("Cannot perform the request")
-	}
-
-	if res.StatusCode != 200 {
-		t.Fatalf("Invalid response status: %s", res.Status)
-	}
-
-	img, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(img) == 0 {
-		t.Fatalf("Empty response body")
-	}
-
-	err = assertSize(img, 300, 200)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if bimg.DetermineImageTypeName(img) != "jpeg" {
-		t.Fatalf("Invalid image type")
-	}
-}
-
-func TestExtract(t *testing.T) {
-	ts := testServer(controller(image.Extract))
-	buf := readFile("large.jpg")
-	url := ts.URL + "?top=100&left=100&areawidth=200&areaheight=120"
-	defer ts.Close()
-
-	res, err := http.Post(url, "image/jpeg", buf)
-	if err != nil {
-		t.Fatal("Cannot perform the request")
-	}
-
-	if res.StatusCode != 200 {
-		t.Fatalf("Invalid response status: %s", res.Status)
-	}
-
-	img, err := io.ReadAll(res.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(img) == 0 {
-		t.Fatalf("Empty response body")
-	}
-
-	err = assertSize(img, 200, 120)
-	if err != nil {
-		t.Error(err)
-	}
-
-	if bimg.DetermineImageTypeName(img) != "jpeg" {
-		t.Fatalf("Invalid image type")
+			if bimg.DetermineImageTypeName(img) != "jpeg" {
+				t.Fatalf("Invalid image type")
+			}
+		})
 	}
 }
 
@@ -484,11 +400,7 @@ func TestMountInvalidPath(t *testing.T) {
 
 func TestPathThumbnailObjectStorage(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	cfg := Config{
-		PathPrefix:       "/",
-		MaxAllowedPixels: 18.0,
-		ObjectStorage:    fakeObjectStorage{body: buf},
-	}
+	cfg := testConfigWithObjectStorage(buf)
 
 	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
@@ -517,11 +429,7 @@ func TestPathThumbnailObjectStorage(t *testing.T) {
 
 func TestPathThumbnailObjectStorageWithType(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	cfg := Config{
-		PathPrefix:       "/",
-		MaxAllowedPixels: 18.0,
-		ObjectStorage:    fakeObjectStorage{body: buf},
-	}
+	cfg := testConfigWithObjectStorage(buf)
 
 	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
@@ -553,11 +461,7 @@ func TestPathThumbnailObjectStorageWithType(t *testing.T) {
 }
 
 func TestPathThumbnailInvalidSpec(t *testing.T) {
-	cfg := Config{
-		PathPrefix:       "/",
-		MaxAllowedPixels: 18.0,
-		ObjectStorage:    fakeObjectStorage{body: []byte("image")},
-	}
+	cfg := testConfigWithObjectStorage([]byte("image"))
 
 	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
@@ -573,12 +477,8 @@ func TestPathThumbnailInvalidSpec(t *testing.T) {
 
 func TestPathThumbnailDisabledEndpoint(t *testing.T) {
 	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
-	cfg := Config{
-		PathPrefix:       "/",
-		MaxAllowedPixels: 18.0,
-		ObjectStorage:    fakeObjectStorage{body: buf},
-		Endpoints:        EndpointSet{"thumbnail"},
-	}
+	cfg := testConfigWithObjectStorage(buf)
+	cfg.Endpoints = EndpointSet{"thumbnail"}
 
 	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
@@ -665,4 +565,25 @@ func assertSize(buf []byte, width, height int) error {
 		return fmt.Errorf("invalid image size: %dx%d, expected: %dx%d", size.Width, size.Height, width, height)
 	}
 	return nil
+}
+
+// testConfigWithObjectStorage creates a Config suitable for testing path thumbnail
+// and object storage endpoints. It wires a fake object storage into both the
+// Config.ObjectStorage field and the Resolver's ObjectImageSource.
+func testConfigWithObjectStorage(body []byte) Config {
+	obj := fakeObjectStorage{body: body}
+	return Config{
+		PathPrefix:       "/",
+		MaxAllowedPixels: 18.0,
+		ObjectStorage:    obj,
+		Resolver: source.NewResolver(
+			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
+			objectsource.NewObjectImageSource(&source.SourceConfig{
+				Type:          objectsource.ImageSourceTypeObject,
+				ObjectStorage: obj,
+			}),
+			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
+			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		),
+	}
 }

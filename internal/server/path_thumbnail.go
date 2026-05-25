@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -21,7 +20,7 @@ type pathThumbnailParams struct {
 	Key     string
 }
 
-func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request) {
+func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			ErrorReply(w, r, img.ErrMethodNotAllowed, cfg.Error)
@@ -41,27 +40,20 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			replyError(w, r, err, img.KindInvalidParam, cfg)
 			return
 		}
-		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/1000000 > cfg.MaxAllowedPixels {
+		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/megaPixel > cfg.MaxAllowedPixels {
 			ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), source.ObjectStorageTimeout)
-		defer cancel()
+		req := withPathThumbnailQuery(r, params)
 
-		body, contentLength, err := cfg.ObjectStorage.Open(ctx, params.Key)
-		if err != nil {
-			ErrorReply(w, r, img.WrapError("Error while fetching object", img.KindUpstream, err), cfg.Error)
-			return
-		}
-		defer func() { _ = body.Close() }()
-
-		if cfg.MaxAllowedSize > 0 && contentLength > int64(cfg.MaxAllowedSize) {
-			ErrorReply(w, r, img.NewError(fmt.Sprintf("Object size %d exceeds maximum allowed %d bytes", contentLength, cfg.MaxAllowedSize), img.KindInvalidParam), cfg.Error)
+		imageSource := resolver.Match(req)
+		if imageSource == nil {
+			ErrorReply(w, r, img.ErrMissingImageSource, cfg.Error)
 			return
 		}
 
-		buf, err := source.ReadObjectBody(body, cfg.MaxAllowedSize)
+		buf, err := imageSource.GetImage(req)
 		if err != nil {
 			replyError(w, r, err, img.KindUpstream, cfg)
 			return
@@ -71,7 +63,6 @@ func pathThumbnailController(cfg Config) func(http.ResponseWriter, *http.Request
 			return
 		}
 
-		req := withPathThumbnailQuery(r, params)
 		imageHandler(w, req, buf, img.Thumbnail, cfg)
 	}
 }
@@ -84,6 +75,7 @@ func withPathThumbnailQuery(r *http.Request, params pathThumbnailParams) *http.R
 	q := cloneQuery(r.URL.Query())
 	q.Set("width", strconv.Itoa(params.Width))
 	q.Set("height", strconv.Itoa(params.Height))
+	q.Set("object", params.Key)
 	if params.Quality > 0 {
 		q.Set("quality", strconv.Itoa(params.Quality))
 	}

@@ -10,105 +10,37 @@ import (
 	"github.com/h2non/bimg"
 )
 
-func TestImageResize(t *testing.T) {
-	t.Run("Width and Height defined", func(t *testing.T) {
-		opts := ImageOptions{Width: 300, Height: 300}
-		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
+func TestImageOperations(t *testing.T) {
+	cases := []struct {
+		name    string
+		op      Operation
+		opts    ImageOptions
+		expectW int
+		expectH int
+	}{
+		{"Resize/BothDims", Resize, ImageOptions{Width: 300, Height: 300}, 300, 300},
+		{"Resize/WidthOnly", Resize, ImageOptions{Width: 300}, 300, 404},
+		{"Resize/NoCropFalse", Resize, ImageOptions{Width: 300, NoCrop: boolPtr(false)}, 300, 740},
+		{"Resize/NoCropTrue", Resize, ImageOptions{Width: 300, NoCrop: boolPtr(true)}, 300, 404},
+		{"Fit", Fit, ImageOptions{Width: 300, Height: 300}, 223, 300},
+		{"AutoRotate", AutoRotate, ImageOptions{}, 550, 740},
+	}
 
-		img, err := Resize(buf, opts)
-		if err != nil {
-			t.Errorf("Cannot process image: %s", err)
-		}
-		if img.Mime != "image/jpeg" {
-			t.Error("Invalid image MIME type")
-		}
-		if assertImageSize(img.Body, opts.Width, opts.Height) != nil {
-			t.Errorf("Invalid image size, expected: %dx%d", opts.Width, opts.Height)
-		}
-	})
-
-	t.Run("Width defined", func(t *testing.T) {
-		opts := ImageOptions{Width: 300}
-		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
-
-		img, err := Resize(buf, opts)
-		if err != nil {
-			t.Errorf("Cannot process image: %s", err)
-		}
-		if img.Mime != "image/jpeg" {
-			t.Error("Invalid image MIME type")
-		}
-		if err := assertImageSize(img.Body, 300, 404); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("Width defined with NoCrop=false", func(t *testing.T) {
-		opts := ImageOptions{Width: 300, NoCrop: boolPtr(false)}
-		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
-
-		img, err := Resize(buf, opts)
-		if err != nil {
-			t.Errorf("Cannot process image: %s", err)
-		}
-		if img.Mime != "image/jpeg" {
-			t.Error("Invalid image MIME type")
-		}
-
-		// The original image is 550x740
-		if err := assertImageSize(img.Body, 300, 740); err != nil {
-			t.Error(err)
-		}
-	})
-
-	t.Run("Width defined with NoCrop=true", func(t *testing.T) {
-		opts := ImageOptions{Width: 300, NoCrop: boolPtr(true)}
-		buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
-
-		img, err := Resize(buf, opts)
-		if err != nil {
-			t.Errorf("Cannot process image: %s", err)
-		}
-		if img.Mime != "image/jpeg" {
-			t.Error("Invalid image MIME type")
-		}
-
-		// The original image is 550x740
-		if err := assertImageSize(img.Body, 300, 404); err != nil {
-			t.Error(err)
-		}
-	})
-
-}
-
-func TestImageFit(t *testing.T) {
-	opts := ImageOptions{Width: 300, Height: 300}
 	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
-	img, err := Fit(buf, opts)
-	if err != nil {
-		t.Errorf("Cannot process image: %s", err)
-	}
-	if img.Mime != "image/jpeg" {
-		t.Error("Invalid image MIME type")
-	}
-	// 550x740 -> 222.9x300
-	if assertImageSize(img.Body, 223, 300) != nil {
-		t.Errorf("Invalid image size, expected: %dx%d", opts.Width, opts.Height)
-	}
-}
-
-func TestImageAutoRotate(t *testing.T) {
-	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
-	img, err := AutoRotate(buf, ImageOptions{})
-	if err != nil {
-		t.Errorf("Cannot process image: %s", err)
-	}
-	if img.Mime != "image/jpeg" {
-		t.Error("Invalid image MIME type")
-	}
-	if assertImageSize(img.Body, 550, 740) != nil {
-		t.Errorf("Invalid image size, expected: %dx%d", 550, 740)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			img, err := tc.op(buf, tc.opts)
+			if err != nil {
+				t.Fatalf("Cannot process image: %s", err)
+			}
+			if img.Mime != "image/jpeg" {
+				t.Error("Invalid image MIME type")
+			}
+			if err := assertImageSize(img.Body, tc.expectW, tc.expectH); err != nil {
+				t.Error(err)
+			}
+		})
 	}
 }
 

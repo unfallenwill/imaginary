@@ -135,7 +135,7 @@ func NewServerMux(cfg Config) http.Handler {
 	mux.Handle(join(prefix, "/flip"), image(img.Flip))
 	mux.Handle(join(prefix, "/flop"), image(img.Flop))
 	mux.Handle(join(prefix, "/thumbnail"), image(img.Thumbnail))
-	pathThumbnail := Middleware(pathThumbnailController(cfg), cfg)
+	pathThumbnail := Middleware(pathThumbnailController(cfg, resolver), cfg)
 	if cfg.EnableURLSignature {
 		pathThumbnail = validateURLSignature(pathThumbnail, cfg)
 	}

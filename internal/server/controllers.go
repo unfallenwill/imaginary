@@ -21,6 +21,11 @@ import (
 	"github.com/h2non/imaginary/internal/version"
 )
 
+const (
+	megaPixel                = 1_000_000
+	defaultMaxWatermarkSize  = 1 << 20 // 1MB
+)
+
 func indexController(prefix string, errCfg ErrorConfig) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != path.Join(prefix, "/") {
@@ -107,7 +112,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 
 	opts, err := img.BuildParamsFromQuery(r.URL.Query())
 	if err != nil {
-		ErrorReply(w, r, img.WrapError("Error while processing parameters", img.KindInvalidParam, err), cfg.Error)
+		replyError(w, r, err, img.KindInvalidParam, cfg)
 		return
 	}
 
@@ -123,13 +128,13 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	sizeInfo, err := bimg.Size(buf)
 
 	if err != nil {
-		ErrorReply(w, r, img.WrapError("Error while processing the image", img.KindProcessing, err), cfg.Error)
+		replyError(w, r, err, img.KindProcessing, cfg)
 		return
 	}
 
 	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
 
-	if (imgResolution / 1000000) > cfg.MaxAllowedPixels {
+	if (imgResolution / megaPixel) > cfg.MaxAllowedPixels {
 		ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
 		return
 	}
@@ -163,7 +168,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		if vary != "" {
 			w.Header().Set("Vary", vary)
 		}
-		ErrorReply(w, r, img.WrapError("Error while processing the image", img.KindProcessing, err), cfg.Error)
+		replyError(w, r, err, img.KindProcessing, cfg)
 		return
 	}
 
@@ -264,7 +269,7 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 	if maxAllowedSize > 0 {
 		reader = io.LimitReader(reader, int64(maxAllowedSize))
 	} else {
-		reader = io.LimitReader(reader, 1e6) // 1MB default limit
+		reader = io.LimitReader(reader, defaultMaxWatermarkSize)
 	}
 
 	buf, err := io.ReadAll(reader)
