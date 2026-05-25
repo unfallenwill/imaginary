@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	megaPixel                = 1_000_000
-	defaultMaxWatermarkSize  = 1 << 20 // 1MB
+	megaPixel               = 1_000_000
+	defaultMaxWatermarkSize = 1 << 20 // 1MB
 )
 
 func indexController(prefix string, errCfg ErrorConfig) func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +89,11 @@ func determineAcceptMimeType(accept string) string {
 	return ""
 }
 
-func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation img.Operation, cfg Config) {
+// detectImageMimeType determines the MIME type of raw image bytes.
+// It uses http.DetectContentType as the primary detector, falls back to
+// filetype matching for application/octet-stream, and checks for SVG
+// in text/plain responses.
+func detectImageMimeType(buf []byte) string {
 	mimeType := http.DetectContentType(buf)
 
 	if mimeType == "application/octet-stream" {
@@ -105,6 +109,70 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		}
 	}
 
+	return mimeType
+}
+
+// parseOutputType resolves the output image type from query parameters.
+// If type is "auto", it negotiates from the Accept header and returns "Accept"
+// for the Vary response header. Returns an error if the explicitly requested
+// type is unsupported.
+func parseOutputType(opts *img.ImageOptions, accept string) (string, error) {
+	if opts.Type == "auto" {
+		opts.Type = determineAcceptMimeType(accept)
+		return "Accept", nil
+	}
+	if opts.Type != "" && img.ImageType(opts.Type) == 0 {
+		return "", img.ErrOutputFormat
+	}
+	return "", nil
+}
+
+// checkResolution validates that image dimensions do not exceed the configured
+// megapixel limit. Returns ErrResolutionTooBig if the image is too large, or a
+// wrapped error if the image cannot be decoded.
+func checkResolution(buf []byte, maxPixels float64) error {
+	if maxPixels <= 0 {
+		return nil
+	}
+	sizeInfo, err := bimg.Size(buf)
+	if err != nil {
+		return img.WrapError(err.Error(), img.KindProcessing, err)
+	}
+	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
+	if (imgResolution / megaPixel) > maxPixels {
+		return img.ErrResolutionTooBig
+	}
+	return nil
+}
+
+// resolveWatermarks downloads remote watermark images for both single-image
+// and pipeline watermark operations, storing fetched bytes into opts.
+// This ensures the image domain layer never performs I/O.
+func resolveWatermarks(ctx context.Context, opts *img.ImageOptions, client *http.Client, maxSize int) error {
+	if opts.Image != "" && len(opts.ImageBytes) == 0 {
+		imageBytes, err := fetchRemoteImage(client, ctx, opts.Image, maxSize)
+		if err != nil {
+			return err
+		}
+		opts.ImageBytes = imageBytes
+	}
+
+	for i := range opts.Operations {
+		op := &opts.Operations[i]
+		if op.Name == "watermarkImage" && op.Params.Image != "" && len(op.Params.ImageBytes) == 0 {
+			imageBytes, err := fetchRemoteImage(client, ctx, op.Params.Image, maxSize)
+			if err != nil {
+				return err
+			}
+			op.Params.ImageBytes = imageBytes
+		}
+	}
+
+	return nil
+}
+
+func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation img.Operation, cfg Config) {
+	mimeType := detectImageMimeType(buf)
 	if !img.IsImageMimeTypeSupported(mimeType) {
 		ErrorReply(w, r, img.ErrUnsupportedMedia, cfg.Error)
 		return
@@ -116,51 +184,20 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		return
 	}
 
-	vary := ""
-	if opts.Type == "auto" {
-		opts.Type = determineAcceptMimeType(r.Header.Get("Accept"))
-		vary = "Accept"
-	} else if opts.Type != "" && img.ImageType(opts.Type) == 0 {
-		ErrorReply(w, r, img.ErrOutputFormat, cfg.Error)
+	vary, err := parseOutputType(&opts, r.Header.Get("Accept"))
+	if err != nil {
+		replyError(w, r, err, img.KindInvalidParam, cfg)
 		return
 	}
 
-	sizeInfo, err := bimg.Size(buf)
-
-	if err != nil {
+	if err := checkResolution(buf, cfg.MaxAllowedPixels); err != nil {
 		replyError(w, r, err, img.KindProcessing, cfg)
 		return
 	}
 
-	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
-
-	if (imgResolution / megaPixel) > cfg.MaxAllowedPixels {
-		ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
+	if err := resolveWatermarks(r.Context(), &opts, cfg.RemoteClient, cfg.MaxAllowedSize); err != nil {
+		replyError(w, r, err, img.KindUpstream, cfg)
 		return
-	}
-
-	// Resolve watermark image URL to bytes before entering the pure domain layer.
-	// The image package must never perform I/O — all network calls happen here.
-	if opts.Image != "" && len(opts.ImageBytes) == 0 {
-		imageBytes, err := fetchRemoteImage(cfg.RemoteClient, r.Context(), opts.Image, cfg.MaxAllowedSize)
-		if err != nil {
-			replyError(w, r, err, img.KindUpstream, cfg)
-			return
-		}
-		opts.ImageBytes = imageBytes
-	}
-
-	// Pipeline operations that contain a watermarkImage step also need their
-	// image URLs resolved to bytes before execution.
-	for i := range opts.Operations {
-		if opts.Operations[i].Name == "watermarkImage" && opts.Operations[i].Params.Image != "" {
-			imageBytes, err := fetchRemoteImage(cfg.RemoteClient, r.Context(), opts.Operations[i].Params.Image, cfg.MaxAllowedSize)
-			if err != nil {
-				replyError(w, r, err, img.KindUpstream, cfg)
-				return
-			}
-			opts.Operations[i].Params.ImageBytes = imageBytes
-		}
 	}
 
 	image, err := operation.Run(buf, opts)
@@ -175,8 +212,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 	w.Header().Set("Content-Length", strconv.Itoa(len(image.Body)))
 	w.Header().Set("Content-Type", image.Mime)
 	if image.Mime != "application/json" && cfg.ReturnSize {
-		meta, err := bimg.Metadata(image.Body)
-		if err == nil {
+		if meta, err := bimg.Metadata(image.Body); err == nil {
 			w.Header().Set("Image-Width", strconv.Itoa(meta.Size.Width))
 			w.Header().Set("Image-Height", strconv.Itoa(meta.Size.Height))
 		}
