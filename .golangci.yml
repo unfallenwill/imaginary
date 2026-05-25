@@ -48,6 +48,20 @@ linters:
             - pkg: "github.com/h2non/imaginary/internal/server"
               desc: "storage 存储层不能依赖 server 传输层"
 
+        # metadata 包是纯领域层，与 image 包相同的限制
+        metadata-domain:
+          files:
+            - "internal/metadata/**/*.go"
+          deny:
+            - pkg: "net/http"
+              desc: "metadata 包不允许直接使用 net/http，HTTP 逻辑属于 server 层"
+            - pkg: "github.com/h2non/imaginary/internal/server"
+              desc: "metadata 领域层不能依赖 server 传输层"
+            - pkg: "github.com/h2non/imaginary/internal/source"
+              desc: "metadata 领域层不能依赖 source 数据源层"
+            - pkg: "github.com/h2non/imaginary/internal/storage"
+              desc: "metadata 领域层不能依赖 storage 存储层"
+
     gocyclo:
       min-complexity: 15
 

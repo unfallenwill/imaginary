@@ -12,6 +12,7 @@ components:
   cmd:       { in: cmd/** }
   config:    { in: internal/config }
   domain:    { in: internal/image }
+  metadata:  { in: internal/metadata }
   server:    { in: internal/server }
   source:    { in: internal/source/** }
   storage:   { in: internal/storage }
@@ -19,6 +20,7 @@ components:
 
 commonComponents:
   - domain
+  - metadata
   - source
   - version
 

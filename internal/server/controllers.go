@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/h2non/filetype"
 
 	img "github.com/h2non/imaginary/internal/image"
+	"github.com/h2non/imaginary/internal/metadata"
 	"github.com/h2non/imaginary/internal/source"
 	"github.com/h2non/imaginary/internal/version"
 )
@@ -71,6 +73,104 @@ func imageController(cfg Config, resolver *source.Resolver, operation img.Operat
 
 		imageHandler(w, req, buf, operation, cfg)
 	}
+}
+
+// metadataController handles metadata extraction requests for both images and videos.
+// It resolves the media source, detects the media type, and dispatches to the
+// appropriate metadata extractor. Unlike imageController, it does not perform
+// image-specific MIME validation, resolution checks, or watermark resolution.
+func metadataController(cfg Config, resolver *source.Resolver) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		imageSource := resolver.Match(req)
+		if imageSource == nil {
+			ErrorReply(w, req, img.ErrMissingImageSource, cfg.Error)
+			return
+		}
+
+		buf, err := imageSource.GetImage(req)
+		if err != nil {
+			replyError(w, req, err, img.KindUpstream, cfg)
+			return
+		}
+
+		if len(buf) == 0 {
+			ErrorReply(w, req, img.ErrEmptyBody, cfg.Error)
+			return
+		}
+
+		mediaType := detectMediaType(buf)
+
+		result, err := metadata.Extract(buf, mediaType)
+		if err != nil {
+			replyError(w, req, err, img.KindProcessing, cfg)
+			return
+		}
+
+		w.Header().Set("Content-Type", result.Mime)
+		w.Header().Set("Content-Length", strconv.Itoa(len(result.Body)))
+		_, _ = w.Write(result.Body)
+	}
+}
+
+// detectMediaType determines whether the byte buffer contains an image or video.
+// It checks image MIME types first (via bimg support), then falls back to
+// video detection via MIME prefix and magic byte signatures.
+func detectMediaType(buf []byte) metadata.MediaType {
+	mime := detectImageMimeType(buf)
+	if img.IsImageMimeTypeSupported(mime) {
+		return metadata.MediaTypeImage
+	}
+
+	if strings.HasPrefix(mime, "video/") {
+		return metadata.MediaTypeVideo
+	}
+
+	if isVideoByMagicBytes(buf) {
+		return metadata.MediaTypeVideo
+	}
+
+	kind, err := filetype.Get(buf)
+	if err == nil {
+		if strings.HasPrefix(kind.MIME.Value, "video/") {
+			return metadata.MediaTypeVideo
+		}
+	}
+
+	return metadata.MediaTypeUnknown
+}
+
+// isVideoByMagicBytes checks for common video container format signatures.
+func isVideoByMagicBytes(buf []byte) bool {
+	if len(buf) < 12 {
+		return false
+	}
+
+	// MP4/MOV/M4A: ftyp box at offset 4
+	if len(buf) > 8 && string(buf[4:8]) == "ftyp" {
+		return true
+	}
+
+	// Matroska/WebM: EBML header
+	if bytes.HasPrefix(buf, []byte{0x1A, 0x45, 0xDF, 0xA3}) {
+		return true
+	}
+
+	// AVI: RIFF....AVI
+	if bytes.HasPrefix(buf, []byte("RIFF")) && len(buf) > 11 && string(buf[8:11]) == "AVI" {
+		return true
+	}
+
+	// FLV: Flash Video
+	if buf[0] == 'F' && buf[1] == 'L' && buf[2] == 'V' {
+		return true
+	}
+
+	// MPEG-TS: 0x47 sync byte pattern
+	if buf[0] == 0x47 && len(buf) > 188 && buf[188] == 0x47 {
+		return true
+	}
+
+	return false
 }
 
 func determineAcceptMimeType(accept string) string {
@@ -246,6 +346,7 @@ func formController(prefix string) func(w http.ResponseWriter, r *http.Request) 
 			{"Add watermark", "watermark", "textwidth=100&text=Hello&font=sans%2012&opacity=0.5&color=255,200,50"},
 			{"Convert format", "convert", "type=png"},
 			{"Image metadata", "info", ""},
+			{"Media metadata (image/video)", "metadata", ""},
 			{"Gaussian blur", "blur", "sigma=15.0&minampl=0.2"},
 			{"Pipeline (image reduction via multiple transformations)", "pipeline", "operations=%5B%7B%22operation%22:%20%22crop%22,%20%22params%22:%20%7B%22width%22:%20300,%20%22height%22:%20260%7D%7D,%20%7B%22operation%22:%20%22convert%22,%20%22params%22:%20%7B%22type%22:%20%22webp%22%7D%7D%5D"},
 		}

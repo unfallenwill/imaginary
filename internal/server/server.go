@@ -148,5 +148,12 @@ func NewServerMux(cfg Config) http.Handler {
 	mux.Handle(join(prefix, "/blur"), image(img.GaussianBlur))
 	mux.Handle(join(prefix, "/pipeline"), image(img.Pipeline))
 
+	// Metadata endpoint (supports images + videos)
+	metaHandler := Middleware(metadataController(cfg, resolver), cfg)
+	if cfg.EnableURLSignature {
+		metaHandler = validateURLSignature(metaHandler, cfg)
+	}
+	mux.Handle(join(prefix, "/metadata"), metaHandler)
+
 	return mux
 }
