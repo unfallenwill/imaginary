@@ -10,6 +10,26 @@ import (
 	img "github.com/h2non/imaginary/internal/image"
 )
 
+// Transport-layer error kinds for HTTP-specific error categories.
+// Defined here (not in image package) because they represent transport
+// concerns (auth, method routing), not image domain concepts.
+const (
+	kindUnauthorized     img.Kind = 100
+	kindForbidden        img.Kind = 101
+	kindMethodNotAllowed img.Kind = 102
+)
+
+// Transport-layer sentinel errors. These represent HTTP-level failures
+// (bad API key, wrong method, invalid signature) that never originate
+// from the image domain layer.
+var (
+	errInvalidAPIKey        = img.NewError("Invalid or missing API key", kindUnauthorized)
+	errMethodNotAllowed     = img.NewError("HTTP method not allowed. Try with a POST or GET method (-enable-url-source flag must be defined)", kindMethodNotAllowed)
+	errGetMethodNotAllowed  = img.NewError("GET method not allowed. Make sure remote URL source is enabled by using the flag: -enable-url-source", kindMethodNotAllowed)
+	errInvalidURLSignature  = img.NewError("Invalid URL signature", img.KindInvalidParam)
+	errURLSignatureMismatch = img.NewError("URL signature mismatch", kindForbidden)
+)
+
 // ErrorConfig holds error response behavior configuration.
 type ErrorConfig struct {
 	PlaceholderEnabled bool
@@ -22,9 +42,9 @@ type ErrorConfig struct {
 var kindToHTTP = map[img.Kind]int{
 	img.KindUnknown:          http.StatusInternalServerError,
 	img.KindNotFound:         http.StatusNotFound,
-	img.KindUnauthorized:     http.StatusUnauthorized,
-	img.KindForbidden:        http.StatusForbidden,
-	img.KindMethodNotAllowed: http.StatusMethodNotAllowed,
+	kindUnauthorized:         http.StatusUnauthorized,
+	kindForbidden:            http.StatusForbidden,
+	kindMethodNotAllowed:     http.StatusMethodNotAllowed,
 	img.KindUnsupportedMedia: http.StatusNotAcceptable,
 	img.KindInvalidParam:     http.StatusBadRequest,
 	img.KindEmptyBody:        http.StatusBadRequest,

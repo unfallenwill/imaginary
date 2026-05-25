@@ -23,7 +23,7 @@ type pathThumbnailParams struct {
 func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			ErrorReply(w, r, img.ErrMethodNotAllowed, cfg.Error)
+			ErrorReply(w, r, errMethodNotAllowed, cfg.Error)
 			return
 		}
 		if cfg.ObjectStorage == nil {

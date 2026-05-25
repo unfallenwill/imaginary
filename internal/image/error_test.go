@@ -16,11 +16,6 @@ func TestDefaultError(t *testing.T) {
 	if err.Kind != image.KindProcessing {
 		t.Fatal("Invalid error kind")
 	}
-
-	jsn := string(err.JSON())
-	if jsn != `{"message":"oops!","status":10}` {
-		t.Fatalf("Invalid JSON output: %s", jsn)
-	}
 }
 
 func TestSentinelErrors(t *testing.T) {
@@ -29,9 +24,6 @@ func TestSentinelErrors(t *testing.T) {
 		kind image.Kind
 	}{
 		{image.ErrNotFound, image.KindNotFound},
-		{image.ErrInvalidAPIKey, image.KindUnauthorized},
-		{image.ErrURLSignatureMismatch, image.KindForbidden},
-		{image.ErrMethodNotAllowed, image.KindMethodNotAllowed},
 		{image.ErrUnsupportedMedia, image.KindUnsupportedMedia},
 		{image.ErrEmptyBody, image.KindEmptyBody},
 		{image.ErrResolutionTooBig, image.KindResolutionTooBig},

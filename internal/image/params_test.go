@@ -2,7 +2,6 @@ package image
 
 import (
 	"math"
-	"net/url"
 	"testing"
 
 	"github.com/h2non/bimg"
@@ -11,14 +10,15 @@ import (
 const epsilon = 0.0001
 
 func TestReadParams(t *testing.T) {
-	q := url.Values{}
-	q.Set("width", "100")
-	q.Add("height", "80")
-	q.Add("noreplicate", "1")
-	q.Add("opacity", "0.2")
-	q.Add("text", "hello")
-	q.Add("background", "255,10,20")
-	q.Add("interlace", "true")
+	q := map[string][]string{
+		"width":       {"100"},
+		"height":      {"80"},
+		"noreplicate": {"1"},
+		"opacity":     {"0.2"},
+		"text":        {"hello"},
+		"background":  {"255,10,20"},
+		"interlace":   {"true"},
+	}
 
 	params, err := BuildParamsFromQuery(q)
 	if err != nil {
@@ -166,7 +166,7 @@ func TestGravity(t *testing.T) {
 	}
 
 	for _, td := range cases {
-		io, _ := BuildParamsFromQuery(url.Values{"gravity": []string{td.gravityValue}})
+		io, _ := BuildParamsFromQuery(map[string][]string{"gravity": {td.gravityValue}})
 		if (io.Gravity == bimg.GravitySmart) != td.smartCropValue {
 			t.Errorf("Expected %t to be %t, test data: %+v", io.Gravity == bimg.GravitySmart, td.smartCropValue, td)
 		}

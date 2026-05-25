@@ -77,7 +77,7 @@ func throttle(next http.Handler, cfg Config) http.Handler {
 func validate(next http.Handler, cfg Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodPost {
-			ErrorReply(w, r, img.ErrMethodNotAllowed, cfg.Error)
+			ErrorReply(w, r, errMethodNotAllowed, cfg.Error)
 			return
 		}
 
@@ -94,7 +94,7 @@ func validateImage(next http.Handler, cfg Config) http.Handler {
 		}
 
 		if r.Method == http.MethodGet && cfg.Mount == "" && !cfg.EnableURLSource {
-			ErrorReply(w, r, img.ErrGetMethodNotAllowed, cfg.Error)
+			ErrorReply(w, r, errGetMethodNotAllowed, cfg.Error)
 			return
 		}
 
@@ -110,7 +110,7 @@ func authorizeClient(next http.Handler, cfg Config) http.Handler {
 		}
 
 		if key != cfg.APIKey {
-			ErrorReply(w, r, img.ErrInvalidAPIKey, cfg.Error)
+			ErrorReply(w, r, errInvalidAPIKey, cfg.Error)
 			return
 		}
 
@@ -165,12 +165,12 @@ func validateURLSignature(next http.Handler, cfg Config) http.Handler {
 
 		urlSign, err := base64.RawURLEncoding.DecodeString(sign)
 		if err != nil {
-			ErrorReply(w, r, img.ErrInvalidURLSignature, cfg.Error)
+			ErrorReply(w, r, errInvalidURLSignature, cfg.Error)
 			return
 		}
 
 		if !hmac.Equal(urlSign, expectedSign) {
-			ErrorReply(w, r, img.ErrURLSignatureMismatch, cfg.Error)
+			ErrorReply(w, r, errURLSignatureMismatch, cfg.Error)
 			return
 		}
 

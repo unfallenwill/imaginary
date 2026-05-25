@@ -1,7 +1,6 @@
 package image
 
 import (
-	"encoding/json"
 	"strings"
 )
 
@@ -12,9 +11,9 @@ type Kind int
 const (
 	KindUnknown          Kind = iota
 	KindNotFound              // resource not found
-	KindUnauthorized          // authentication failure
-	KindForbidden             // authorization or signature mismatch
-	KindMethodNotAllowed      // wrong HTTP method
+	_                         // moved to server: authentication failure
+	_                         // moved to server: authorization or signature mismatch
+	_                         // moved to server: wrong HTTP method
 	KindUnsupportedMedia      // image format not supported
 	KindInvalidParam          // missing or malformed parameter
 	KindEmptyBody             // empty or unreadable image data
@@ -56,18 +55,6 @@ func (e *Error) Is(target error) bool {
 	return e.Kind == t.Kind
 }
 
-// JSON serializes the error for wire transport.
-// Note: the "status" field contains the semantic Kind code, not an HTTP status.
-// The server layer provides the HTTP status mapping where needed.
-func (e *Error) JSON() []byte {
-	type wire struct {
-		Message string `json:"message,omitempty"`
-		Status  int    `json:"status"`
-	}
-	buf, _ := json.Marshal(wire{Message: e.Message, Status: int(e.Kind)})
-	return buf
-}
-
 // NewError creates an *image.Error with an explicit message and semantic kind.
 func NewError(message string, kind Kind) *Error {
 	message = strings.ReplaceAll(message, "\n", "")
@@ -83,9 +70,6 @@ func WrapError(message string, kind Kind, err error) *Error {
 
 var (
 	ErrNotFound             = NewError("Not found", KindNotFound)
-	ErrInvalidAPIKey        = NewError("Invalid or missing API key", KindUnauthorized)
-	ErrMethodNotAllowed     = NewError("HTTP method not allowed. Try with a POST or GET method (-enable-url-source flag must be defined)", KindMethodNotAllowed)
-	ErrGetMethodNotAllowed  = NewError("GET method not allowed. Make sure remote URL source is enabled by using the flag: -enable-url-source", KindMethodNotAllowed)
 	ErrUnsupportedMedia     = NewError("Unsupported media type", KindUnsupportedMedia)
 	ErrOutputFormat         = NewError("Unsupported output image format", KindInvalidParam)
 	ErrEmptyBody            = NewError("Empty or unreadable image", KindEmptyBody)
@@ -94,8 +78,6 @@ var (
 	ErrInvalidImageURL      = NewError("Invalid image URL", KindInvalidParam)
 	ErrMissingImageSource   = NewError("Cannot process the image due to missing or invalid params", KindInvalidParam)
 	ErrNotImplemented       = NewError("Not implemented endpoint", KindNotImplemented)
-	ErrInvalidURLSignature  = NewError("Invalid URL signature", KindInvalidParam)
-	ErrURLSignatureMismatch = NewError("URL signature mismatch", KindForbidden)
 	ErrResolutionTooBig     = NewError("Image resolution is too big", KindResolutionTooBig)
 	ErrUpstream             = NewError("Upstream service error", KindUpstream)
 	ErrOriginNotAllowed     = NewError("Remote URL origin not allowed", KindUpstream)

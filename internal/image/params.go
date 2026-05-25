@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -13,12 +12,15 @@ import (
 
 // BuildParamsFromQuery builds ImageOptions from HTTP query parameters.
 // Unknown parameter names are silently ignored, preserving backward compatibility.
-func BuildParamsFromQuery(query url.Values) (ImageOptions, error) {
+func BuildParamsFromQuery(query map[string][]string) (ImageOptions, error) {
 	var options ImageOptions
 	options.Extend = bimg.ExtendCopy
 
-	for key := range query {
-		value := query.Get(key)
+	for key, vals := range query {
+		value := ""
+		if len(vals) > 0 {
+			value = vals[0]
+		}
 		if err := applyQueryParam(&options, key, value); err != nil {
 			return ImageOptions{}, fmt.Errorf(`error while processing parameter "%s" with value %q, error: %w`, key, value, err)
 		}
