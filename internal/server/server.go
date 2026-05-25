@@ -155,5 +155,12 @@ func NewServerMux(cfg Config) http.Handler {
 	}
 	mux.Handle(join(prefix, "/metadata"), metaHandler)
 
+	// Frame extraction endpoint (video → JPEG)
+	frameHandler := Middleware(frameController(cfg, resolver), cfg)
+	if cfg.EnableURLSignature {
+		frameHandler = validateURLSignature(frameHandler, cfg)
+	}
+	mux.Handle(join(prefix, "/frame"), frameHandler)
+
 	return mux
 }

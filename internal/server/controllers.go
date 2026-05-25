@@ -17,6 +17,7 @@ import (
 	"github.com/h2non/bimg"
 	"github.com/h2non/filetype"
 
+	framepkg "github.com/h2non/imaginary/internal/frame"
 	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/metadata"
 	"github.com/h2non/imaginary/internal/source"
@@ -101,6 +102,55 @@ func metadataController(cfg Config, resolver *source.Resolver) func(http.Respons
 		mediaType := detectMediaType(buf)
 
 		result, err := metadata.Extract(buf, mediaType)
+		if err != nil {
+			replyError(w, req, err, img.KindProcessing, cfg)
+			return
+		}
+
+		w.Header().Set("Content-Type", result.Mime)
+		w.Header().Set("Content-Length", strconv.Itoa(len(result.Body)))
+		_, _ = w.Write(result.Body)
+	}
+}
+
+// frameController handles video frame extraction requests.
+// It resolves the media source, validates it as video, and extracts a single
+// frame at the requested time offset as a JPEG image.
+func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, req *http.Request) {
+		imageSource := resolver.Match(req)
+		if imageSource == nil {
+			ErrorReply(w, req, img.ErrMissingImageSource, cfg.Error)
+			return
+		}
+
+		buf, err := imageSource.GetImage(req)
+		if err != nil {
+			replyError(w, req, err, img.KindUpstream, cfg)
+			return
+		}
+
+		if len(buf) == 0 {
+			ErrorReply(w, req, img.ErrEmptyBody, cfg.Error)
+			return
+		}
+
+		timeSeconds := 0.0
+		if t := req.URL.Query().Get("time"); t != "" {
+			timeSeconds, err = strconv.ParseFloat(t, 64)
+			if err != nil || timeSeconds < 0 {
+				ErrorReply(w, req, img.NewError("Invalid time parameter: must be a non-negative number", img.KindInvalidParam), cfg.Error)
+				return
+			}
+		}
+
+		mediaType := detectMediaType(buf)
+		if mediaType != metadata.MediaTypeVideo {
+			ErrorReply(w, req, img.NewError("Frame extraction requires a video input", img.KindUnsupportedMedia), cfg.Error)
+			return
+		}
+
+		result, err := framepkg.Extract(buf, timeSeconds)
 		if err != nil {
 			replyError(w, req, err, img.KindProcessing, cfg)
 			return
@@ -347,6 +397,7 @@ func formController(prefix string) func(w http.ResponseWriter, r *http.Request) 
 			{"Convert format", "convert", "type=png"},
 			{"Image metadata", "info", ""},
 			{"Media metadata (image/video)", "metadata", ""},
+			{"Video frame extraction", "frame", "time=1.5"},
 			{"Gaussian blur", "blur", "sigma=15.0&minampl=0.2"},
 			{"Pipeline (image reduction via multiple transformations)", "pipeline", "operations=%5B%7B%22operation%22:%20%22crop%22,%20%22params%22:%20%7B%22width%22:%20300,%20%22height%22:%20260%7D%7D,%20%7B%22operation%22:%20%22convert%22,%20%22params%22:%20%7B%22type%22:%20%22webp%22%7D%7D%5D"},
 		}

@@ -4,18 +4,14 @@ package metadata
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
 
 	"github.com/asticode/go-astiav"
 
+	"github.com/h2non/imaginary/internal/avio"
 	img "github.com/h2non/imaginary/internal/image"
 )
 
-const (
-	ioBufferSize     = 32768
-	durationTimeBase = float64(astiav.TimeBase) // AV_TIME_BASE = 1,000,000
-)
+const durationTimeBase = float64(astiav.TimeBase) // AV_TIME_BASE = 1,000,000
 
 // ExtractVideo extracts metadata from a video buffer using FFmpeg via go-astiav.
 // It creates a custom AVIO context to read from the []byte buffer without
@@ -27,7 +23,7 @@ func ExtractVideo(buf []byte) (MetadataResult, error) {
 	}
 	defer formatCtx.Free()
 
-	ioCtx, err := newMemoryIOContext(buf)
+	ioCtx, err := avio.NewMemoryIOContext(buf)
 	if err != nil {
 		return MetadataResult{}, img.WrapError("Cannot create IO context", img.KindProcessing, err)
 	}
@@ -52,40 +48,6 @@ func ExtractVideo(buf []byte) (MetadataResult, error) {
 	}
 
 	return MetadataResult{Body: body, Mime: "application/json"}, nil
-}
-
-// newMemoryIOContext creates an astiav.IOContext that reads from a byte slice.
-func newMemoryIOContext(data []byte) (*astiav.IOContext, error) {
-	offset := int64(0)
-	size := int64(len(data))
-
-	readFunc := func(b []byte) (int, error) {
-		if offset >= size {
-			return 0, io.EOF
-		}
-		n := copy(b, data[offset:])
-		offset += int64(n)
-		return n, nil
-	}
-
-	seekFunc := func(off int64, whence int) (int64, error) {
-		switch whence {
-		case io.SeekStart:
-			offset = off
-		case io.SeekCurrent:
-			offset += off
-		case io.SeekEnd:
-			offset = size + off
-		default:
-			return 0, fmt.Errorf("unsupported whence: %d", whence)
-		}
-		if offset < 0 {
-			offset = 0
-		}
-		return offset, nil
-	}
-
-	return astiav.AllocIOContext(ioBufferSize, false, readFunc, seekFunc, nil)
 }
 
 // buildVideoMetadata constructs VideoMetadata from a probed FormatContext.
