@@ -35,7 +35,7 @@ func BuildParamsFromOperation(op PipelineOperation) (ImageOptions, error) {
 }
 
 // applyQueryParam sets the appropriate field on ImageOptions for a known query parameter.
-// Returns ErrUnsupportedValue for malformed values. Unknown keys return nil (ignored).
+// Returns a parse error for malformed values. Unknown keys return nil (ignored).
 func applyQueryParam(opts *ImageOptions, key, value string) error {
 	setter, ok := paramSetters[key]
 	if !ok {
