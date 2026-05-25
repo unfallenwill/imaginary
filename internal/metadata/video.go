@@ -51,7 +51,7 @@ func ExtractVideo(buf []byte) (MetadataResult, error) {
 		return MetadataResult{}, img.WrapError("Cannot serialize video metadata", img.KindProcessing, err)
 	}
 
-	return MetadataResult{Body: body}, nil
+	return MetadataResult{Body: body, Mime: "application/json"}, nil
 }
 
 // newMemoryIOContext creates an astiav.IOContext that reads from a byte slice.
@@ -172,7 +172,7 @@ func dictToMap(d *astiav.Dictionary) map[string]string {
 	var prev *astiav.DictionaryEntry
 
 	for {
-		entry := d.Get("", prev, astiav.DictionaryFlagIgnoreSuffix)
+		entry := d.Get("", prev, astiav.DictionaryFlags(astiav.DictionaryFlagIgnoreSuffix))
 		if entry == nil {
 			break
 		}
