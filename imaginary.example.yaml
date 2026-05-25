@@ -27,12 +27,12 @@ burst: 100
 api_key: ""
 
 # TLS
-certfile: ""
-keyfile: ""
+cert_file: ""
+key_file: ""
 
 # URL image source
 enable_url_source: false
-enable_auth_forwarding: false
+auth_forwarding: false
 authorization: ""
 forward_headers: ""
 allowed_origins: ""
