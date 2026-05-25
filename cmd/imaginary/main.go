@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/h2non/imaginary/internal/config"
+	img "github.com/h2non/imaginary/internal/image"
 	"github.com/h2non/imaginary/internal/server"
 	"github.com/h2non/imaginary/internal/source"
 	bodysource "github.com/h2non/imaginary/internal/source/body"
@@ -145,6 +146,7 @@ func main() {
 			PlaceholderEnabled: placeholderEnabled,
 			PlaceholderImage:   placeholderImage,
 			PlaceholderStatus:  cfg.PlaceholderStatus,
+			Resizer:            img.BimgResizer{},
 		},
 		ObjectStorage: objectStorage,
 		Resolver:      resolver,

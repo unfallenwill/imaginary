@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/h2non/bimg"
-
 	img "github.com/h2non/imaginary/internal/image"
 )
 
@@ -30,11 +28,19 @@ var (
 	errURLSignatureMismatch = img.NewError("URL signature mismatch", kindForbidden)
 )
 
+// PlaceholderResizer abstracts the image resize operation used to render
+// placeholder error responses. Defined at the consumer so the error layer
+// doesn't directly depend on bimg/libvips.
+type PlaceholderResizer interface {
+	ResizePlaceholder(buf []byte, width, height int, imageType string) ([]byte, string, error)
+}
+
 // ErrorConfig holds error response behavior configuration.
 type ErrorConfig struct {
 	PlaceholderEnabled bool
 	PlaceholderImage   []byte
 	PlaceholderStatus  int
+	Resizer            PlaceholderResizer
 }
 
 // kindToHTTP maps semantic error kinds to HTTP status codes.
@@ -83,11 +89,14 @@ func ErrorReply(w http.ResponseWriter, r *http.Request, err *img.Error, cfg Erro
 }
 
 func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller *img.Error, cfg ErrorConfig) {
-	bimgOptions := bimg.Options{
-		Force:   true,
-		Crop:    true,
-		Enlarge: true,
-		Type:    img.ImageType(r.URL.Query().Get("type")),
+	if cfg.Resizer == nil {
+		// No resizer configured — fall back to JSON error response.
+		status := httpStatusFor(errCaller)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		buf, _ := json.Marshal(errorResponse{Error: errCaller.Error(), Status: status})
+		_, _ = w.Write(buf)
+		return
 	}
 
 	width, werr := strconv.Atoi(r.URL.Query().Get("width"))
@@ -95,28 +104,28 @@ func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller *img
 		sendErrorResponse(w, http.StatusBadRequest, werr)
 		return
 	}
-	bimgOptions.Width = width
 
 	height, herr := strconv.Atoi(r.URL.Query().Get("height"))
 	if herr != nil {
 		sendErrorResponse(w, http.StatusBadRequest, herr)
 		return
 	}
-	bimgOptions.Height = height
 
-	buf, err := bimg.Resize(cfg.PlaceholderImage, bimgOptions)
+	imageType := r.URL.Query().Get("type")
+
+	buf, mime, err := cfg.Resizer.ResizePlaceholder(cfg.PlaceholderImage, width, height, imageType)
 	if err != nil {
 		sendErrorResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", img.GetImageMimeType(bimg.DetermineImageType(buf)))
+	w.Header().Set("Content-Type", mime)
 	status := httpStatusFor(errCaller)
 	w.Header().Set("Error", string(errorReplyJSON(errCaller, status)))
 	if cfg.PlaceholderStatus != 0 {
 		w.WriteHeader(cfg.PlaceholderStatus)
 	} else {
-		w.WriteHeader(httpStatusFor(errCaller))
+		w.WriteHeader(status)
 	}
 	_, _ = w.Write(buf)
 }
