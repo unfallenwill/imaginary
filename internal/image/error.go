@@ -165,4 +165,3 @@ var (
 	ErrOriginNotAllowed   = &UpstreamError{Err: NewError("Remote URL origin not allowed")}
 	ErrContentTooLarge    = &InvalidParamError{Err: NewError("Content size exceeds maximum allowed")}
 )
-
