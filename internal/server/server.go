@@ -161,6 +161,11 @@ func NewServerMux(cfg Config) http.Handler {
 		frameHandler = validateURLSignature(frameHandler, cfg)
 	}
 	mux.Handle(join(prefix, "/frame"), frameHandler)
+	pathFrame := Middleware(pathFrameController(cfg, resolver), cfg)
+	if cfg.EnableURLSignature {
+		pathFrame = validateURLSignature(pathFrame, cfg)
+	}
+	mux.Handle(framePathPattern(prefix), pathFrame)
 
 	return mux
 }
