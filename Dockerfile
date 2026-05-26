@@ -1,27 +1,39 @@
+# syntax=docker/dockerfile:1
+
 # ---- Builder stage ----
-ARG GOLANG_VERSION=1.26.3
-FROM golang:${GOLANG_VERSION}-bookworm AS builder
+FROM golang:1.26.3-bookworm AS builder
 
 ARG IMAGINARY_VERSION=dev
 
-# Install libvips from Debian packages — no source compilation needed.
-# This layer is cached until the base image changes.
-RUN DEBIAN_FRONTEND=noninteractive \
-  apt-get update && \
-  apt-get install --no-install-recommends -y \
-  libvips-dev && \
-  rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
-# Cache go modules — only invalidated when go.mod or go.sum changes.
-COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get update && \
+    apt-get install --no-install-recommends -y \
+    libvips-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavfilter-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswresample-dev \
+    libswscale-dev
 
-# Copy source and build.
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
 COPY . .
 
-RUN CGO_ENABLED=1 go build -trimpath \
+ARG BUILD_TAGS="ffmpeg"
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 \
+    go build -trimpath \
+    -tags "${BUILD_TAGS}" \
     -o /out/imaginary \
     -ldflags="-s -w -X github.com/h2non/imaginary/internal/version.Version=${IMAGINARY_VERSION}" \
     ./cmd/imaginary
@@ -31,22 +43,29 @@ FROM debian:bookworm-slim
 
 ARG IMAGINARY_VERSION
 
-LABEL maintainer="tomas@aparicio.me" \
-      org.label-schema.description="Fast, simple, scalable HTTP microservice for high-level image processing with first-class Docker support" \
-      org.label-schema.schema-version="1.0" \
-      org.label-schema.url="https://github.com/h2non/imaginary" \
-      org.label-schema.vcs-url="https://github.com/h2non/imaginary" \
-      org.label-schema.version="${IMAGINARY_VERSION}"
+LABEL org.opencontainers.image.title="imaginary" \
+      org.opencontainers.image.description="Fast HTTP microservice for high-level image processing" \
+      org.opencontainers.image.url="https://github.com/h2non/imaginary" \
+      org.opencontainers.image.source="https://github.com/h2non/imaginary" \
+      org.opencontainers.image.version="${IMAGINARY_VERSION}" \
+      org.opencontainers.image.authors="tomas@aparicio.me"
 
-# Install runtime libraries. apt pulls transitive dependencies automatically,
-# so only direct libvips42 + image format libraries are needed.
-RUN DEBIAN_FRONTEND=noninteractive \
-  apt-get update && \
-  apt-get install --no-install-recommends -y \
-  ca-certificates \
-  libvips42 \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+# FFmpeg 5.1.x runtime libraries (sonames pinned to Debian bookworm libav* package versions).
+# If the base image is upgraded to a newer Debian release, bump these sonames accordingly.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get update && \
+    apt-get install --no-install-recommends -y \
+    ca-certificates \
+    libavcodec59 \
+    libavdevice59 \
+    libavfilter8 \
+    libavformat59 \
+    libavutil57 \
+    libswresample4 \
+    libswscale6 \
+    libvips42
 
 COPY --from=builder /out/imaginary /usr/local/bin/imaginary
 
@@ -54,6 +73,7 @@ ENV PORT=9000
 
 USER nobody
 
-ENTRYPOINT ["/usr/local/bin/imaginary"]
+STOPSIGNAL SIGTERM
+EXPOSE 9000
 
-EXPOSE ${PORT}
+ENTRYPOINT ["/usr/local/bin/imaginary"]
