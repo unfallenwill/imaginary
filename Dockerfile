@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     DEBIAN_FRONTEND=noninteractive \
     apt-get update && \
     apt-get install --no-install-recommends -y \
-    ca-certificates curl \
+    build-essential ca-certificates curl \
     libvips-dev \
     libavcodec-dev \
     libavdevice-dev \
