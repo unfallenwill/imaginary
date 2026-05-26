@@ -14,15 +14,24 @@ import (
 	"github.com/h2non/imaginary/internal/version"
 )
 
-const ImageSourceTypeHTTP source.ImageSourceType = "http"
 const URLQueryKey = "url"
 
-type HTTPImageSource struct {
-	Config *source.SourceConfig
+// Config holds configuration for the HTTP image source.
+type Config struct {
+	AuthForwarding bool
+	Authorization  string
+	ForwardHeaders []string
+	AllowedOrigins []*url.URL
+	MaxAllowedSize int
+	HTTPClient     source.HTTPClient
 }
 
-func NewHTTPImageSource(config *source.SourceConfig) source.ImageSource {
-	return &HTTPImageSource{config}
+type HTTPImageSource struct {
+	Config *Config
+}
+
+func NewHTTPImageSource(cfg Config) source.ImageSource {
+	return &HTTPImageSource{Config: &cfg}
 }
 
 func (s *HTTPImageSource) Matches(r *http.Request) bool {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -22,21 +21,6 @@ type HTTPClient interface {
 // Defined here at the consumer, following Go's "define interfaces where they're used" principle.
 type ObjectStorage interface {
 	Open(ctx context.Context, key string) (io.ReadCloser, int64, error)
-}
-
-type ImageSourceType string
-type ImageSourceFactoryFunction func(*SourceConfig) ImageSource
-
-type SourceConfig struct {
-	AuthForwarding bool
-	Authorization  string
-	MountPath      string
-	Type           ImageSourceType
-	ForwardHeaders []string
-	AllowedOrigins []*url.URL
-	MaxAllowedSize int
-	ObjectStorage  ObjectStorage
-	HTTPClient     HTTPClient
 }
 
 type ImageSource interface {

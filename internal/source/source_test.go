@@ -12,8 +12,8 @@ import (
 
 func TestResolverMatch(t *testing.T) {
 	resolver := source.NewResolver(
-		bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-		httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+		bodysource.NewBodyImageSource(),
+		httpsource.NewHTTPImageSource(httpsource.Config{}),
 	)
 
 	u, _ := url.Parse("http://foo?url=http://bar/image.jpg")

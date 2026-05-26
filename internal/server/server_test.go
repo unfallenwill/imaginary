@@ -216,10 +216,10 @@ func TestRemoteHTTPSource(t *testing.T) {
 		MaxAllowedSize:   0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
@@ -266,10 +266,10 @@ func TestInvalidRemoteHTTPSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
@@ -299,13 +299,10 @@ func TestMountDirectory(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{
-				Type:      fssource.ImageSourceTypeFileSystem,
-				MountPath: "../../testdata",
-			}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource("../../testdata"),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
@@ -346,13 +343,10 @@ func TestMountInvalidDirectory(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{
-				Type:      fssource.ImageSourceTypeFileSystem,
-				MountPath: "_invalid_",
-			}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource("_invalid_"),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
@@ -375,13 +369,10 @@ func TestMountInvalidPath(t *testing.T) {
 		Mount:      "_invalid_",
 		PathPrefix: "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{
-				Type:      fssource.ImageSourceTypeFileSystem,
-				MountPath: "_invalid_",
-			}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource("_invalid_"),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Crop)
@@ -500,13 +491,10 @@ func TestObjectStorageSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{
-				Type:          objectsource.ImageSourceTypeObject,
-				ObjectStorage: fakeObjectStorage{body: buf},
-			}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(fakeObjectStorage{body: buf}, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 	fn := ImageMiddleware(cfg, cfg.Resolver)(image.Thumbnail)
@@ -578,13 +566,10 @@ func testConfigWithObjectStorage(body []byte) Config {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    obj,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{
-				Type:          objectsource.ImageSourceTypeObject,
-				ObjectStorage: obj,
-			}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(obj, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 }

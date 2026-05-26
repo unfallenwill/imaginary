@@ -8,15 +8,15 @@ import (
 	"github.com/h2non/imaginary/internal/source"
 )
 
-const ImageSourceTypeObject source.ImageSourceType = "object"
 const ObjectQueryKey = "object"
 
 type ObjectImageSource struct {
-	Config *source.SourceConfig
+	storage        source.ObjectStorage
+	maxAllowedSize int
 }
 
-func NewObjectImageSource(config *source.SourceConfig) source.ImageSource {
-	return &ObjectImageSource{config}
+func NewObjectImageSource(storage source.ObjectStorage, maxAllowedSize int) source.ImageSource {
+	return &ObjectImageSource{storage: storage, maxAllowedSize: maxAllowedSize}
 }
 
 func (s *ObjectImageSource) Matches(r *http.Request) bool {
@@ -24,7 +24,7 @@ func (s *ObjectImageSource) Matches(r *http.Request) bool {
 }
 
 func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
-	if s.Config.ObjectStorage == nil {
+	if s.storage == nil {
 		return nil, image.ErrMissingImageSource
 	}
 
@@ -36,17 +36,17 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(r.Context(), source.ObjectStorageTimeout)
 	defer cancel()
 
-	body, contentLength, err := s.Config.ObjectStorage.Open(ctx, key)
+	body, contentLength, err := s.storage.Open(ctx, key)
 	if err != nil {
 		return nil, image.Wrap(image.KindUpstream, "error fetching remote object", err)
 	}
 	defer func() { _ = body.Close() }()
 
-	if s.Config.MaxAllowedSize > 0 && contentLength > int64(s.Config.MaxAllowedSize) {
+	if s.maxAllowedSize > 0 && contentLength > int64(s.maxAllowedSize) {
 		return nil, image.ErrContentTooLarge
 	}
 
-	buf, err := source.ReadObjectBody(body, s.Config.MaxAllowedSize)
+	buf, err := source.ReadObjectBody(body, s.maxAllowedSize)
 	if err != nil {
 		return nil, err
 	}
@@ -56,15 +56,3 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 
 	return buf, nil
 }
-
-// ReadObjectBody delegates to source.ReadObjectBody for backward compatibility.
-// Deprecated: use source.ReadObjectBody directly.
-var ReadObjectBody = source.ReadObjectBody
-
-// ValidateObjectKey delegates to source.ValidateObjectKey for backward compatibility.
-// Deprecated: use source.ValidateObjectKey directly.
-var ValidateObjectKey = source.ValidateObjectKey
-
-// ObjectStorageTimeout delegates to source.ObjectStorageTimeout for backward compatibility.
-// Deprecated: use source.ObjectStorageTimeout directly.
-const ObjectStorageTimeout = source.ObjectStorageTimeout

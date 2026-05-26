@@ -396,7 +396,6 @@ func TestParseAllFlags(t *testing.T) {
 		"-http-read-timeout", "30",
 		"-http-write-timeout", "30",
 		"-concurrency", "5",
-		"-burst", "50",
 		"-mrelease", "60",
 		"-log-level", "debug",
 		"-return-size",

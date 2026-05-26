@@ -26,7 +26,7 @@ storage:
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadFile(configFile)
+	cfg, err := loadFile(configFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ return_size: true
 		t.Fatal(err)
 	}
 
-	cfg, err := LoadFile(configFile)
+	cfg, err := loadFile(configFile)
 	if err != nil {
 		t.Fatal(err)
 	}

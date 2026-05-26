@@ -33,7 +33,6 @@ type Config struct {
 	CORS               bool
 	APIKey             string
 	Concurrency        int
-	Burst              int
 	HTTPCacheTTL       int
 	EnableURLSource    bool
 	Mount              string

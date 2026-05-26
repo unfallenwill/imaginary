@@ -67,13 +67,10 @@ func TestMetadataImageFileSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		Mount:            "../../testdata",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{
-				Type:      fssource.ImageSourceTypeFileSystem,
-				MountPath: "../../testdata",
-			}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource("../../testdata"),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 
@@ -121,10 +118,10 @@ func TestMetadataMissingSource(t *testing.T) {
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 
@@ -154,13 +151,10 @@ func TestMetadataObjectStorageSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    obj,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{
-				Type:          objectsource.ImageSourceTypeObject,
-				ObjectStorage: obj,
-			}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(obj, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 
@@ -214,10 +208,10 @@ func testMetadataConfig() Config {
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(&source.SourceConfig{Type: bodysource.ImageSourceTypeBody}),
-			objectsource.NewObjectImageSource(&source.SourceConfig{Type: objectsource.ImageSourceTypeObject}),
-			fssource.NewFileSystemImageSource(&source.SourceConfig{Type: fssource.ImageSourceTypeFileSystem}),
-			httpsource.NewHTTPImageSource(&source.SourceConfig{Type: httpsource.ImageSourceTypeHTTP}),
+			bodysource.NewBodyImageSource(),
+			objectsource.NewObjectImageSource(nil, 0),
+			fssource.NewFileSystemImageSource(""),
+			httpsource.NewHTTPImageSource(httpsource.Config{}),
 		),
 	}
 }

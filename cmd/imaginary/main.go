@@ -132,7 +132,6 @@ func main() {
 		CORS:               cfg.CORS,
 		APIKey:             cfg.APIKey,
 		Concurrency:        cfg.Concurrency,
-		Burst:              cfg.Burst,
 		HTTPCacheTTL:       cfg.HTTPCacheTTL,
 		EnableURLSource:    cfg.EnableURLSource,
 		Mount:              cfg.Mount,
@@ -157,31 +156,19 @@ func main() {
 	server.Server(serverCfg)
 }
 
-func resolveObjectStorage(cfg config.CLIConfig) (source.ObjectStorage, error) {
+func resolveObjectStorage(cfg config.Config) (source.ObjectStorage, error) {
 	if cfg.Storage.Type == "" {
 		return nil, nil
 	}
 	return storage.NewProvider(context.Background(), cfg.Storage)
 }
 
-func buildResolver(cfg config.CLIConfig, objectStorage source.ObjectStorage) *source.Resolver {
+func buildResolver(cfg config.Config, objectStorage source.ObjectStorage) *source.Resolver {
 	return source.NewResolver(
-		bodysource.NewBodyImageSource(&source.SourceConfig{
-			Type:           bodysource.ImageSourceTypeBody,
-			ObjectStorage:  objectStorage,
-			MaxAllowedSize: cfg.MaxAllowedSize,
-		}),
-		objectsource.NewObjectImageSource(&source.SourceConfig{
-			Type:           objectsource.ImageSourceTypeObject,
-			ObjectStorage:  objectStorage,
-			MaxAllowedSize: cfg.MaxAllowedSize,
-		}),
-		fssource.NewFileSystemImageSource(&source.SourceConfig{
-			Type:      fssource.ImageSourceTypeFileSystem,
-			MountPath: cfg.Mount,
-		}),
-		httpsource.NewHTTPImageSource(&source.SourceConfig{
-			Type:           httpsource.ImageSourceTypeHTTP,
+		bodysource.NewBodyImageSource(),
+		objectsource.NewObjectImageSource(objectStorage, cfg.MaxAllowedSize),
+		fssource.NewFileSystemImageSource(cfg.Mount),
+		httpsource.NewHTTPImageSource(httpsource.Config{
 			AuthForwarding: cfg.AuthForwarding,
 			Authorization:  cfg.Authorization,
 			ForwardHeaders: cfg.ForwardHeaders,

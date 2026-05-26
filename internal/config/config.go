@@ -11,15 +11,16 @@ import (
 	"strings"
 
 	"github.com/h2non/bimg"
+	"gopkg.in/yaml.v3"
 
 	img "github.com/h2non/imaginary/internal/image"
 )
 
 const maxHTTPCacheTTLSecs = 31_556_926 // ~1 tropical year in seconds (365.2425 days)
 
-// CLIConfig holds all configuration parsed from command-line flags,
+// Config holds all configuration parsed from command-line flags,
 // environment variables, and optional YAML config file.
-type CLIConfig struct {
+type Config struct {
 	// Meta
 	ShowHelp    bool
 	ShowVersion bool
@@ -44,7 +45,6 @@ type CLIConfig struct {
 	CORS        bool
 	APIKey      string
 	Concurrency int
-	Burst       int
 
 	// Caching
 	HTTPCacheTTL int
@@ -81,9 +81,6 @@ type CLIConfig struct {
 	// Config file
 	ConfigFile string
 
-	// Deprecated
-	Gzip bool
-
 	// Resolved from config file
 	Storage StorageOptions
 
@@ -92,25 +89,24 @@ type CLIConfig struct {
 	allowedOriginsRaw string
 }
 
-// DefaultConfig returns a CLIConfig with sensible defaults.
-func DefaultConfig() CLIConfig {
-	return CLIConfig{
+// DefaultConfig returns a Config with sensible defaults.
+func DefaultConfig() Config {
+	return Config{
 		Port:             8088,
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		HTTPReadTimeout:  60,
 		HTTPWriteTimeout: 60,
 		LogLevel:         "info",
-		Burst:            100,
 		MRelease:         30,
 		CPUs:             runtime.GOMAXPROCS(-1),
 		HTTPCacheTTL:     -1,
 	}
 }
 
-// Parse parses command-line flags, config file, and environment variables into a CLIConfig.
+// Parse parses command-line flags, config file, and environment variables into a Config.
 // Priority: code defaults < config file < CLI flags < env vars.
-func Parse(args []string) (CLIConfig, error) {
+func Parse(args []string) (Config, error) {
 	cfg := DefaultConfig()
 
 	fs := flag.NewFlagSet("imaginary", flag.ContinueOnError)
@@ -124,7 +120,6 @@ func Parse(args []string) (CLIConfig, error) {
 	fs.IntVar(&cfg.Port, "p", cfg.Port, "Port to listen")
 	fs.StringVar(&cfg.PathPrefix, "path-prefix", cfg.PathPrefix, "URL path prefix to listen to")
 	fs.BoolVar(&cfg.CORS, "cors", cfg.CORS, "Enable CORS support")
-	fs.BoolVar(&cfg.Gzip, "gzip", cfg.Gzip, "Enable gzip compression (deprecated)")
 	fs.BoolVar(&cfg.AuthForwarding, "enable-auth-forwarding", cfg.AuthForwarding, "Forward Authorization header to image source server")
 	fs.BoolVar(&cfg.EnableURLSource, "enable-url-source", cfg.EnableURLSource, "Enable remote HTTP URL image source processing")
 	fs.BoolVar(&cfg.EnablePlaceholder, "enable-placeholder", cfg.EnablePlaceholder, "Enable image placeholder on error")
@@ -146,7 +141,6 @@ func Parse(args []string) (CLIConfig, error) {
 	fs.IntVar(&cfg.HTTPReadTimeout, "http-read-timeout", cfg.HTTPReadTimeout, "HTTP read timeout in seconds")
 	fs.IntVar(&cfg.HTTPWriteTimeout, "http-write-timeout", cfg.HTTPWriteTimeout, "HTTP write timeout in seconds")
 	fs.IntVar(&cfg.Concurrency, "concurrency", cfg.Concurrency, "Max concurrent image processing requests")
-	fs.IntVar(&cfg.Burst, "burst", cfg.Burst, "Deprecated: no longer used")
 	fs.IntVar(&cfg.MRelease, "mrelease", cfg.MRelease, "Memory release interval in seconds")
 	fs.IntVar(&cfg.CPUs, "cpus", cfg.CPUs, "Number of CPU cores to use")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info, warning, error")
@@ -154,7 +148,7 @@ func Parse(args []string) (CLIConfig, error) {
 	fs.StringVar(&cfg.ConfigFile, "config", cfg.ConfigFile, "YAML config file path")
 
 	if err := fs.Parse(args); err != nil {
-		return CLIConfig{}, err
+		return Config{}, err
 	}
 
 	// Collect explicitly set CLI flags.
@@ -170,9 +164,9 @@ func Parse(args []string) (CLIConfig, error) {
 	}
 
 	if configPath != "" {
-		fileCfg, err := LoadFile(configPath)
+		fileCfg, err := loadFile(configPath)
 		if err != nil {
-			return CLIConfig{}, fmt.Errorf("cannot load config file: %w", err)
+			return Config{}, fmt.Errorf("cannot load config file: %w", err)
 		}
 		applyFileOverrides(&cfg, fileCfg, explicit)
 	}
@@ -207,9 +201,9 @@ func setFileOverride[T any](flagName string, val *T, dst *T, explicit map[string
 	}
 }
 
-// applyFileOverrides applies FileConfig values to CLIConfig for fields not
+// applyFileOverrides applies FileConfig values to Config for fields not
 // explicitly set via CLI flags.
-func applyFileOverrides(cfg *CLIConfig, f FileConfig, explicit map[string]struct{}) {
+func applyFileOverrides(cfg *Config, f fileConfig, explicit map[string]struct{}) {
 	// Network
 	setFileOverride("a", f.Addr, &cfg.Addr, explicit)
 	setFileOverride("p", f.Port, &cfg.Port, explicit)
@@ -230,7 +224,6 @@ func applyFileOverrides(cfg *CLIConfig, f FileConfig, explicit map[string]struct
 	setFileOverride("cors", f.CORS, &cfg.CORS, explicit)
 	setFileOverride("key", f.APIKey, &cfg.APIKey, explicit)
 	setFileOverride("concurrency", f.Concurrency, &cfg.Concurrency, explicit)
-	setFileOverride("burst", f.Burst, &cfg.Burst, explicit)
 
 	// Caching
 	setFileOverride("http-cache-ttl", f.HTTPCacheTTL, &cfg.HTTPCacheTTL, explicit)
@@ -271,7 +264,7 @@ func applyFileOverrides(cfg *CLIConfig, f FileConfig, explicit map[string]struct
 }
 
 // applyEnvOverrides applies environment variable overrides for select fields.
-func (c *CLIConfig) applyEnvOverrides() {
+func (c *Config) applyEnvOverrides() {
 	if portEnv := os.Getenv("PORT"); portEnv != "" {
 		if p, err := strconv.Atoi(portEnv); err == nil && p > 0 {
 			c.Port = p
@@ -286,7 +279,7 @@ func (c *CLIConfig) applyEnvOverrides() {
 }
 
 // Validate checks the configuration for errors.
-func (c CLIConfig) Validate() error {
+func (c Config) Validate() error {
 	if c.Mount != "" {
 		src, err := os.Stat(c.Mount)
 		if err != nil {
@@ -315,15 +308,11 @@ func (c CLIConfig) Validate() error {
 		}
 	}
 
-	if c.Gzip {
-		fmt.Println("warning: -gzip flag is deprecated and will not have effect")
-	}
-
 	return nil
 }
 
 // ResolvePlaceholder loads the placeholder image bytes if configured.
-func (c CLIConfig) ResolvePlaceholder() ([]byte, bool, error) {
+func (c Config) ResolvePlaceholder() ([]byte, bool, error) {
 	if c.Placeholder != "" {
 		buf, err := os.ReadFile(c.Placeholder) // #nosec G304 -- path provided by server operator
 		if err != nil {
@@ -344,7 +333,7 @@ func (c CLIConfig) ResolvePlaceholder() ([]byte, bool, error) {
 }
 
 // ParseEndpoints parses the disable-endpoints string into a normalized list.
-func (c CLIConfig) ParseEndpoints() []string {
+func (c Config) ParseEndpoints() []string {
 	if c.DisableEndpoints == "" {
 		return nil
 	}
@@ -372,6 +361,55 @@ func (s *stringValue) String() string {
 func (s *stringValue) Set(v string) error {
 	*s.dst = v
 	return nil
+}
+
+// fileConfig is the YAML-parsed representation of the config file.
+// All fields are pointers to distinguish "not set" from zero values.
+type fileConfig struct {
+	Addr               *string         `yaml:"addr"`
+	Port               *int            `yaml:"port"`
+	CertFile           *string         `yaml:"cert_file"`
+	KeyFile            *string         `yaml:"key_file"`
+	HTTPReadTimeout    *int            `yaml:"http_read_timeout"`
+	HTTPWriteTimeout   *int            `yaml:"http_write_timeout"`
+	LogLevel           *string         `yaml:"log_level"`
+	PathPrefix         *string         `yaml:"path_prefix"`
+	CORS               *bool           `yaml:"cors"`
+	APIKey             *string         `yaml:"api_key"`
+	Concurrency        *int            `yaml:"concurrency"`
+	HTTPCacheTTL       *int            `yaml:"http_cache_ttl"`
+	EnableURLSource    *bool           `yaml:"enable_url_source"`
+	AuthForwarding     *bool           `yaml:"auth_forwarding"`
+	Authorization      *string         `yaml:"authorization"`
+	ForwardHeaders     *string         `yaml:"forward_headers"`
+	AllowedOrigins     *string         `yaml:"allowed_origins"`
+	MaxAllowedSize     *int            `yaml:"max_allowed_size"`
+	MaxAllowedPixels   *float64        `yaml:"max_allowed_pixels"`
+	EnableURLSignature *bool           `yaml:"enable_url_signature"`
+	URLSignatureKey    *string         `yaml:"url_signature_key"`
+	Mount              *string         `yaml:"mount"`
+	DisableEndpoints   *string         `yaml:"disable_endpoints"`
+	EnablePlaceholder  *bool           `yaml:"enable_placeholder"`
+	Placeholder        *string         `yaml:"placeholder"`
+	PlaceholderStatus  *int            `yaml:"placeholder_status"`
+	CPUs               *int            `yaml:"cpus"`
+	MRelease           *int            `yaml:"mrelease"`
+	ReturnSize         *bool           `yaml:"return_size"`
+	Storage            *StorageOptions `yaml:"storage"`
+}
+
+// loadFile reads and parses a YAML config file, expanding environment
+// variables in string values before decoding.
+func loadFile(filename string) (fileConfig, error) {
+	var cfg fileConfig
+
+	buf, err := os.ReadFile(filename) // #nosec G304 -- config path is explicitly provided by the server operator.
+	if err != nil {
+		return cfg, err
+	}
+
+	err = yaml.Unmarshal([]byte(os.ExpandEnv(string(buf))), &cfg)
+	return cfg, err
 }
 
 // --- internal helpers ---

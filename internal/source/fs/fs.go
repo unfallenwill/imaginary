@@ -11,14 +11,12 @@ import (
 	"github.com/h2non/imaginary/internal/source"
 )
 
-const ImageSourceTypeFileSystem source.ImageSourceType = "fs"
-
 type FileSystemImageSource struct {
-	Config *source.SourceConfig
+	mountPath string
 }
 
-func NewFileSystemImageSource(config *source.SourceConfig) source.ImageSource {
-	return &FileSystemImageSource{config}
+func NewFileSystemImageSource(mountPath string) source.ImageSource {
+	return &FileSystemImageSource{mountPath: mountPath}
 }
 
 func (s *FileSystemImageSource) Matches(r *http.Request) bool {
@@ -48,8 +46,8 @@ func (s *FileSystemImageSource) GetImage(r *http.Request) ([]byte, error) {
 }
 
 func (s *FileSystemImageSource) buildPath(file string) (string, error) {
-	file = path.Clean(path.Join(s.Config.MountPath, file))
-	if !strings.HasPrefix(file, s.Config.MountPath) {
+	file = path.Clean(path.Join(s.mountPath, file))
+	if !strings.HasPrefix(file, s.mountPath) {
 		return "", image.ErrInvalidFilePath
 	}
 	return file, nil

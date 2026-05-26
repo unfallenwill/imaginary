@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/h2non/imaginary/internal/source"
 )
 
 const fixtureImage = "../../../testdata/large.jpg"
@@ -63,7 +61,7 @@ func TestHttpImageSource(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	source := NewHTTPImageSource(&source.SourceConfig{})
+	source := NewHTTPImageSource(Config{})
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {
 		if !source.Matches(r) {
 			t.Fatal("Cannot match the request")
@@ -94,7 +92,7 @@ func TestHttpImageSourceAllowedOrigin(t *testing.T) {
 
 	origin, _ := url.Parse(ts.URL)
 	origins := []*url.URL{origin}
-	source := NewHTTPImageSource(&source.SourceConfig{AllowedOrigins: origins})
+	source := NewHTTPImageSource(Config{AllowedOrigins: origins})
 
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {
 		if !source.Matches(r) {
@@ -120,7 +118,7 @@ func TestHttpImageSourceAllowedOrigin(t *testing.T) {
 func TestHttpImageSourceNotAllowedOrigin(t *testing.T) {
 	origin, _ := url.Parse("http://foo")
 	origins := []*url.URL{origin}
-	source := NewHTTPImageSource(&source.SourceConfig{AllowedOrigins: origins})
+	source := NewHTTPImageSource(Config{AllowedOrigins: origins})
 
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {
 		if !source.Matches(r) {
@@ -152,7 +150,7 @@ func TestHttpImageSourceForwardAuthHeader(t *testing.T) {
 		r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url=http://bar.com", nil)
 		r.Header.Set(header, "foobar")
 
-		source := &HTTPImageSource{&source.SourceConfig{AuthForwarding: true}}
+		source := &HTTPImageSource{&Config{AuthForwarding: true}}
 		if !source.Matches(r) {
 			t.Fatal("Cannot match the request")
 		}
@@ -176,7 +174,7 @@ func TestHttpImageSourceForwardHeaders(t *testing.T) {
 		r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url=http://bar.com", nil)
 		r.Header.Set(header, "foobar")
 
-		source := &HTTPImageSource{&source.SourceConfig{ForwardHeaders: cases}}
+		source := &HTTPImageSource{&Config{ForwardHeaders: cases}}
 		if !source.Matches(r) {
 			t.Fatal("Cannot match the request")
 		}
@@ -201,7 +199,7 @@ func TestHttpImageSourceNotForwardHeaders(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url="+testURL.String(), nil)
 	r.Header.Set("Not-Forward", "foobar")
 
-	source := &HTTPImageSource{&source.SourceConfig{ForwardHeaders: cases}}
+	source := &HTTPImageSource{&Config{ForwardHeaders: cases}}
 	if !source.Matches(r) {
 		t.Fatal("Cannot match the request")
 	}
@@ -224,7 +222,7 @@ func TestHttpImageSourceForwardedHeadersNotOverride(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url="+testURL.String(), nil)
 	r.Header.Set("Authorization", "foobar")
 
-	source := &HTTPImageSource{&source.SourceConfig{Authorization: "ValidAPIKey", ForwardHeaders: cases}}
+	source := &HTTPImageSource{&Config{Authorization: "ValidAPIKey", ForwardHeaders: cases}}
 	if !source.Matches(r) {
 		t.Fatal("Cannot match the request")
 	}
@@ -247,7 +245,7 @@ func TestHttpImageSourceCaseSensitivityInForwardedHeaders(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url="+testURL.String(), nil)
 	r.Header.Set("x-custom", "foobar")
 
-	source := &HTTPImageSource{&source.SourceConfig{ForwardHeaders: cases}}
+	source := &HTTPImageSource{&Config{ForwardHeaders: cases}}
 	if !source.Matches(r) {
 		t.Fatal("Cannot match the request")
 	}
@@ -266,7 +264,7 @@ func TestHttpImageSourceEmptyForwardedHeaders(t *testing.T) {
 
 	r, _ := http.NewRequest(http.MethodGet, "http://foo/bar?url="+testURL.String(), nil)
 
-	source := &HTTPImageSource{&source.SourceConfig{ForwardHeaders: cases}}
+	source := &HTTPImageSource{&Config{ForwardHeaders: cases}}
 	if !source.Matches(r) {
 		t.Fatal("Cannot match the request")
 	}
@@ -292,7 +290,7 @@ func TestHttpImageSourceError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	source := NewHTTPImageSource(&source.SourceConfig{})
+	source := NewHTTPImageSource(Config{})
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {
 		if !source.Matches(r) {
 			t.Fatal("Cannot match the request")
@@ -319,7 +317,7 @@ func TestHttpImageSourceExceedsMaximumAllowedLength(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	source := NewHTTPImageSource(&source.SourceConfig{
+	source := NewHTTPImageSource(Config{
 		MaxAllowedSize: 1023,
 	})
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {

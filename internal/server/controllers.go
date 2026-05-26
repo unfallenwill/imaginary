@@ -442,15 +442,18 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 	}
 
 	var reader io.Reader = resp.Body
+	limit := defaultMaxWatermarkSize
 	if maxAllowedSize > 0 {
-		reader = io.LimitReader(reader, int64(maxAllowedSize))
-	} else {
-		reader = io.LimitReader(reader, defaultMaxWatermarkSize)
+		limit = maxAllowedSize
 	}
+	reader = io.LimitReader(reader, int64(limit)+1)
 
 	buf, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, img.Wrap(img.KindUpstream, "read body", err)
+	}
+	if len(buf) > limit {
+		return nil, img.ErrContentTooLarge
 	}
 	if len(buf) == 0 {
 		return nil, img.ErrEmptyBody

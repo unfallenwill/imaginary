@@ -12,14 +12,10 @@ import (
 const formFieldName = "file"
 const maxMemory int64 = 1024 * 1024 * 64
 
-const ImageSourceTypeBody source.ImageSourceType = "payload"
+type BodyImageSource struct{}
 
-type BodyImageSource struct {
-	Config *source.SourceConfig
-}
-
-func NewBodyImageSource(config *source.SourceConfig) source.ImageSource {
-	return &BodyImageSource{config}
+func NewBodyImageSource() source.ImageSource {
+	return &BodyImageSource{}
 }
 
 func (s *BodyImageSource) Matches(r *http.Request) bool {

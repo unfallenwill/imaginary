@@ -5,8 +5,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-
-	"github.com/h2non/imaginary/internal/source"
 )
 
 func TestFileSystemImageSource(t *testing.T) {
@@ -14,7 +12,7 @@ func TestFileSystemImageSource(t *testing.T) {
 	var err error
 	const fixtureFile = "../../../testdata/large.jpg"
 
-	src := NewFileSystemImageSource(&source.SourceConfig{MountPath: "../../../testdata"})
+	src := NewFileSystemImageSource("../../../testdata")
 	fakeHandler := func(w http.ResponseWriter, r *http.Request) {
 		if !src.Matches(r) {
 			t.Fatal("Cannot match the request")
