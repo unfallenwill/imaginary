@@ -1,17 +1,18 @@
 # syntax=docker/dockerfile:1
 
 # ---- Builder stage ----
-FROM golang:1.26.3-bookworm AS builder
+FROM ubuntu:26.04 AS builder
 
 ARG IMAGINARY_VERSION=dev
+ARG GOLANG_VERSION=1.26.3
 
-WORKDIR /app
-
+# Install Go and FFmpeg build dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     DEBIAN_FRONTEND=noninteractive \
     apt-get update && \
     apt-get install --no-install-recommends -y \
+    ca-certificates curl \
     libvips-dev \
     libavcodec-dev \
     libavdevice-dev \
@@ -20,6 +21,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libavutil-dev \
     libswresample-dev \
     libswscale-dev
+
+RUN curl -fsSL https://go.dev/dl/go${GOLANG_VERSION}.linux-amd64.tar.gz | \
+    tar -C /usr/local -xz && \
+    ln -s /usr/local/go/bin/go /usr/local/bin/go
+
+ENV GOPATH=/go
+ENV PATH=/go/bin:/usr/local/go/bin:$PATH
+
+WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -39,7 +49,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     ./cmd/imaginary
 
 # ---- Runtime stage ----
-FROM debian:bookworm-slim
+FROM ubuntu:26.04
 
 ARG IMAGINARY_VERSION
 
@@ -50,22 +60,20 @@ LABEL org.opencontainers.image.title="imaginary" \
       org.opencontainers.image.version="${IMAGINARY_VERSION}" \
       org.opencontainers.image.authors="tomas@aparicio.me"
 
-# FFmpeg 5.1.x runtime libraries (sonames pinned to Debian bookworm libav* package versions).
-# If the base image is upgraded to a newer Debian release, bump these sonames accordingly.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     DEBIAN_FRONTEND=noninteractive \
     apt-get update && \
     apt-get install --no-install-recommends -y \
     ca-certificates \
-    libavcodec59 \
-    libavdevice59 \
-    libavfilter8 \
-    libavformat59 \
-    libavutil57 \
-    libswresample4 \
-    libswscale6 \
-    libvips42
+    libvips42 \
+    libavcodec62 \
+    libavdevice62 \
+    libavfilter11 \
+    libavformat62 \
+    libavutil60 \
+    libswresample6 \
+    libswscale9
 
 COPY --from=builder /out/imaginary /usr/local/bin/imaginary
 
