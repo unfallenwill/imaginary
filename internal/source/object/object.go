@@ -38,7 +38,7 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 
 	body, contentLength, err := s.Config.ObjectStorage.Open(ctx, key)
 	if err != nil {
-		return nil, image.WrapError("error fetching remote object", image.KindUpstream, err)
+		return nil, image.WrapUpstreamError("error fetching remote object", err)
 	}
 	defer func() { _ = body.Close() }()
 

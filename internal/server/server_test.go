@@ -287,7 +287,8 @@ func TestInvalidRemoteHTTPSource(t *testing.T) {
 	if err != nil {
 		t.Fatal("Request failed")
 	}
-	if res.StatusCode != 400 {
+	// Upstream returned an error, so we return 502 Bad Gateway
+	if res.StatusCode != 502 {
 		t.Fatalf("Invalid response status: %d", res.StatusCode)
 	}
 }

@@ -66,7 +66,7 @@ func (s *FileSystemImageSource) read(file string) ([]byte, error) {
 func (s *FileSystemImageSource) getFileParam(r *http.Request) (string, error) {
 	unescaped, err := url.QueryUnescape(r.URL.Query().Get("file"))
 	if err != nil {
-		return "", image.WrapError("failed to unescape file param", image.KindInvalidParam, err)
+		return "", image.WrapInvalidParamError("failed to unescape file param", err)
 	}
 
 	return unescaped, nil

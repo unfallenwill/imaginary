@@ -9,5 +9,5 @@ import (
 // NewMemoryIOContext returns an error when FFmpeg libraries are not available.
 // Build with `-tags cgo,ffmpeg` to enable FFmpeg-based memory I/O.
 func NewMemoryIOContext(data []byte) (struct{}, error) {
-	return struct{}{}, img.NewError("FFmpeg memory I/O requires FFmpeg (build with -tags cgo,ffmpeg)", img.KindNotImplemented)
+	return struct{}{}, img.NewNotImplementedError("FFmpeg memory I/O requires FFmpeg (build with -tags cgo,ffmpeg)")
 }

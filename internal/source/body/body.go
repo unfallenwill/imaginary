@@ -40,12 +40,12 @@ func isFormBody(r *http.Request) bool {
 func readFormBody(r *http.Request) ([]byte, error) {
 	err := r.ParseMultipartForm(maxMemory)
 	if err != nil {
-		return nil, image.WrapError("failed to parse multipart form", image.KindInvalidParam, err)
+		return nil, image.WrapInvalidParamError("failed to parse multipart form", err)
 	}
 
 	file, _, err := r.FormFile(formFieldName)
 	if err != nil {
-		return nil, image.WrapError("missing form file field", image.KindInvalidParam, err)
+		return nil, image.WrapInvalidParamError("missing form file field", err)
 	}
 	defer func() { _ = file.Close() }()
 
@@ -60,7 +60,7 @@ func readFormBody(r *http.Request) ([]byte, error) {
 func readRawBody(r *http.Request) ([]byte, error) {
 	buf, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, image.WrapError("error reading request body", image.KindInvalidParam, err)
+		return nil, image.WrapInvalidParamError("error reading request body", err)
 	}
 	return buf, nil
 }

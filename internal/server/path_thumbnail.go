@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -37,7 +36,7 @@ func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.Re
 
 		params, err := parsePathThumbnailParams(r.URL.Path, cfg.PathPrefix)
 		if err != nil {
-			replyError(w, r, err, img.KindInvalidParam, cfg)
+			ErrorReply(w, r, err, cfg.Error)
 			return
 		}
 		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/megaPixel > cfg.MaxAllowedPixels {
@@ -55,7 +54,7 @@ func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.Re
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			replyError(w, r, err, img.KindUpstream, cfg)
+			ErrorReply(w, r, err, cfg.Error)
 			return
 		}
 		if len(buf) == 0 {
@@ -101,12 +100,12 @@ func parsePathThumbnailParams(requestPath, prefix string) (pathThumbnailParams, 
 
 	pattern := thumbnailPathPattern(prefix)
 	if !strings.HasPrefix(requestPath, pattern) {
-		return params, fmt.Errorf("invalid thumbnail path")
+		return params, img.NewInvalidParamError("invalid thumbnail path")
 	}
 
 	parts := strings.SplitN(strings.TrimPrefix(requestPath, pattern), "/", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return params, fmt.Errorf("invalid thumbnail path")
+		return params, img.NewInvalidParamError("invalid thumbnail path")
 	}
 
 	width, height, quality, imageType, err := parseThumbnailSpec(parts[0])
@@ -138,27 +137,27 @@ func parseThumbnailSpec(spec string) (int, int, int, string, error) {
 	if idx := strings.LastIndex(spec, "q"); idx > -1 {
 		dimensions = spec[:idx]
 		if dimensions == "" || spec[idx+1:] == "" {
-			return 0, 0, 0, "", fmt.Errorf("invalid thumbnail spec")
+			return 0, 0, 0, "", img.NewInvalidParamError("invalid thumbnail spec")
 		}
 		var err error
 		quality, err = strconv.Atoi(spec[idx+1:])
 		if err != nil || quality < 1 || quality > 100 {
-			return 0, 0, 0, "", fmt.Errorf("invalid thumbnail quality")
+			return 0, 0, 0, "", img.NewInvalidParamError("invalid thumbnail quality")
 		}
 	}
 
 	parts := strings.Split(dimensions, "x")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return 0, 0, 0, "", fmt.Errorf("invalid thumbnail dimensions")
+		return 0, 0, 0, "", img.NewInvalidParamError("invalid thumbnail dimensions")
 	}
 
 	width, err := strconv.Atoi(parts[0])
 	if err != nil || width <= 0 {
-		return 0, 0, 0, "", fmt.Errorf("invalid thumbnail width")
+		return 0, 0, 0, "", img.NewInvalidParamError("invalid thumbnail width")
 	}
 	height, err := strconv.Atoi(parts[1])
 	if err != nil || height <= 0 {
-		return 0, 0, 0, "", fmt.Errorf("invalid thumbnail height")
+		return 0, 0, 0, "", img.NewInvalidParamError("invalid thumbnail height")
 	}
 
 	return width, height, quality, imageType, nil
@@ -170,11 +169,11 @@ func splitThumbnailSpecType(spec string) (string, string, error) {
 		return spec, "", nil
 	}
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("invalid thumbnail type")
+		return "", "", img.NewInvalidParamError("invalid thumbnail type")
 	}
 	imageType := strings.ToLower(parts[1])
 	if img.ImageType(imageType) == 0 {
-		return "", "", fmt.Errorf("invalid thumbnail type")
+		return "", "", img.NewInvalidParamError("invalid thumbnail type")
 	}
 
 	return parts[0], imageType, nil

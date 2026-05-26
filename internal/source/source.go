@@ -95,7 +95,7 @@ func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 	if maxAllowedSize <= 0 {
 		buf, err := io.ReadAll(body)
 		if err != nil {
-			return nil, image.WrapError("error reading object body", image.KindUpstream, err)
+			return nil, image.WrapUpstreamError("error reading object body", err)
 		}
 		return buf, nil
 	}
@@ -103,7 +103,7 @@ func ReadObjectBody(body io.Reader, maxAllowedSize int) ([]byte, error) {
 	limited := io.LimitReader(body, int64(maxAllowedSize)+1)
 	buf, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, image.WrapError("error reading object body", image.KindUpstream, err)
+		return nil, image.WrapUpstreamError("error reading object body", err)
 	}
 	if len(buf) > maxAllowedSize {
 		return nil, image.ErrContentTooLarge

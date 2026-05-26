@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -63,7 +62,7 @@ func imageController(cfg Config, resolver *source.Resolver, operation img.Operat
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			replyError(w, req, err, img.KindUpstream, cfg)
+			ErrorReply(w, req, err, cfg.Error)
 			return
 		}
 
@@ -90,7 +89,7 @@ func metadataController(cfg Config, resolver *source.Resolver) func(http.Respons
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			replyError(w, req, err, img.KindUpstream, cfg)
+			ErrorReply(w, req, err, cfg.Error)
 			return
 		}
 
@@ -103,7 +102,7 @@ func metadataController(cfg Config, resolver *source.Resolver) func(http.Respons
 
 		result, err := metadata.Extract(buf, mediaType)
 		if err != nil {
-			replyError(w, req, err, img.KindProcessing, cfg)
+			ErrorReply(w, req, err, cfg.Error)
 			return
 		}
 
@@ -126,7 +125,7 @@ func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWr
 
 		buf, err := imageSource.GetImage(req)
 		if err != nil {
-			replyError(w, req, err, img.KindUpstream, cfg)
+			ErrorReply(w, req, err, cfg.Error)
 			return
 		}
 
@@ -139,20 +138,20 @@ func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWr
 		if t := req.URL.Query().Get("time"); t != "" {
 			timeSeconds, err = strconv.ParseFloat(t, 64)
 			if err != nil || timeSeconds < 0 {
-				ErrorReply(w, req, img.NewError("Invalid time parameter: must be a non-negative number", img.KindInvalidParam), cfg.Error)
+				ErrorReply(w, req, img.NewInvalidParamError("Invalid time parameter: must be a non-negative number"), cfg.Error)
 				return
 			}
 		}
 
 		mediaType := detectMediaType(buf)
 		if mediaType != metadata.MediaTypeVideo {
-			ErrorReply(w, req, img.NewError("Frame extraction requires a video input", img.KindUnsupportedMedia), cfg.Error)
+			ErrorReply(w, req, img.NewUnsupportedMediaError("Frame extraction requires a video input"), cfg.Error)
 			return
 		}
 
 		result, err := framepkg.Extract(buf, timeSeconds)
 		if err != nil {
-			replyError(w, req, err, img.KindProcessing, cfg)
+			ErrorReply(w, req, err, cfg.Error)
 			return
 		}
 
@@ -286,7 +285,7 @@ func checkResolution(buf []byte, maxPixels float64) error {
 	}
 	sizeInfo, err := bimg.Size(buf)
 	if err != nil {
-		return img.WrapError(err.Error(), img.KindProcessing, err)
+		return img.WrapProcessingError("cannot determine image size", err)
 	}
 	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
 	if (imgResolution / megaPixel) > maxPixels {
@@ -330,23 +329,23 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 
 	opts, err := img.BuildParamsFromQuery(map[string][]string(r.URL.Query()))
 	if err != nil {
-		replyError(w, r, err, img.KindInvalidParam, cfg)
+		ErrorReply(w, r, img.WrapInvalidParamError("invalid image parameters", err), cfg.Error)
 		return
 	}
 
 	vary, err := parseOutputType(&opts, r.Header.Get("Accept"))
 	if err != nil {
-		replyError(w, r, err, img.KindInvalidParam, cfg)
+		ErrorReply(w, r, err, cfg.Error)
 		return
 	}
 
 	if err := checkResolution(buf, cfg.MaxAllowedPixels); err != nil {
-		replyError(w, r, err, img.KindProcessing, cfg)
+		ErrorReply(w, r, err, cfg.Error)
 		return
 	}
 
 	if err := resolveWatermarks(r.Context(), &opts, cfg.RemoteClient, cfg.MaxAllowedSize); err != nil {
-		replyError(w, r, err, img.KindUpstream, cfg)
+		ErrorReply(w, r, err, cfg.Error)
 		return
 	}
 
@@ -355,7 +354,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		if vary != "" {
 			w.Header().Set("Vary", vary)
 		}
-		replyError(w, r, err, img.KindProcessing, cfg)
+		ErrorReply(w, r, err, cfg.Error)
 		return
 	}
 
@@ -420,17 +419,6 @@ func formController(prefix string) func(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// replyError writes an error reply, transparently passing through *image.Error.
-// Non-image errors are wrapped with the given kind.
-func replyError(w http.ResponseWriter, r *http.Request, err error, kind img.Kind, cfg Config) {
-	var imgErr *img.Error
-	if errors.As(err, &imgErr) {
-		ErrorReply(w, r, imgErr, cfg.Error)
-	} else {
-		ErrorReply(w, r, img.WrapError(err.Error(), kind, err), cfg.Error)
-	}
-}
-
 // fetchRemoteImage downloads an image from a URL with proper context propagation,
 // timeout, and size limits. This is the only place in the server where outbound
 // HTTP requests for watermark images are made.
@@ -440,17 +428,17 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
 	if err != nil {
-		return nil, img.WrapError("invalid watermark URL", img.KindInvalidParam, err)
+		return nil, img.WrapInvalidParamError("invalid watermark URL", err)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, img.WrapError("fetch failed", img.KindUpstream, err)
+		return nil, img.WrapUpstreamError("fetch failed", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, img.NewError(fmt.Sprintf("remote returned status %d", resp.StatusCode), img.KindUpstream)
+		return nil, img.NewUpstreamError(fmt.Sprintf("remote returned status %d", resp.StatusCode))
 	}
 
 	var reader io.Reader = resp.Body
@@ -462,7 +450,7 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 
 	buf, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, img.WrapError("read body", img.KindUpstream, err)
+		return nil, img.WrapUpstreamError("read body", err)
 	}
 	if len(buf) == 0 {
 		return nil, img.ErrEmptyBody
