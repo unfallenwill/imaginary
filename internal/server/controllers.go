@@ -426,12 +426,12 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil) // #nosec G704 -- imageURL is validated by the allowed-origins whitelist in the source layer
 	if err != nil {
 		return nil, img.WrapInvalidParamError("invalid watermark URL", err)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704 -- see above
 	if err != nil {
 		return nil, img.WrapUpstreamError("fetch failed", err)
 	}

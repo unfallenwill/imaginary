@@ -137,30 +137,31 @@ func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *
 	return req, nil
 }
 
+// originAllowed checks if a URL matches a specific allowed origin.
+func originAllowed(u *url.URL, origin *url.URL) bool {
+	if origin.Host == u.Host {
+		return strings.HasPrefix(u.Path, origin.Path)
+	}
+
+	if strings.HasPrefix(origin.Host, "*.") {
+		suffix := origin.Host[1:] // e.g. ".example.com"
+		prefix := origin.Host[2:] // e.g. "example.com"
+		if u.Host == prefix || strings.HasSuffix(u.Host, suffix) {
+			return strings.HasPrefix(u.Path, origin.Path)
+		}
+	}
+
+	return false
+}
+
 func shouldRestrictOrigin(url *url.URL, origins []*url.URL) bool {
 	if len(origins) == 0 {
 		return false
 	}
 
 	for _, origin := range origins {
-		if origin.Host == url.Host {
-			if strings.HasPrefix(url.Path, origin.Path) {
-				return false
-			}
-		}
-
-		if len(origin.Host) >= 2 && origin.Host[0:2] == "*." {
-			if url.Host == origin.Host[2:] {
-				if strings.HasPrefix(url.Path, origin.Path) {
-					return false
-				}
-			}
-
-			if strings.HasSuffix(url.Host, origin.Host[1:]) {
-				if strings.HasPrefix(url.Path, origin.Path) {
-					return false
-				}
-			}
+		if originAllowed(url, origin) {
+			return false
 		}
 	}
 

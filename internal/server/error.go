@@ -167,7 +167,7 @@ func replyWithPlaceholder(w http.ResponseWriter, r *http.Request, errCaller erro
 	} else {
 		w.WriteHeader(status)
 	}
-	_, _ = w.Write(buf)
+	_, _ = w.Write(buf) // #nosec G705 -- buf is a placeholder image (not user-controlled HTML)
 }
 
 func sendErrorResponse(w http.ResponseWriter, statusCode int, err error) {

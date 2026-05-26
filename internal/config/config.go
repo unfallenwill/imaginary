@@ -197,91 +197,72 @@ func defaultConfigPath() string {
 	return ""
 }
 
+// setFileOverride sets dst to *val if val is non-nil and flagName was not
+// explicitly set via CLI flags.
+func setFileOverride[T any](flagName string, val *T, dst *T, explicit map[string]struct{}) {
+	if val != nil {
+		if _, ok := explicit[flagName]; !ok {
+			*dst = *val
+		}
+	}
+}
+
 // applyFileOverrides applies FileConfig values to CLIConfig for fields not
 // explicitly set via CLI flags.
 func applyFileOverrides(cfg *CLIConfig, f FileConfig, explicit map[string]struct{}) {
-	setString := func(flagName string, val *string, dst *string) {
-		if val != nil {
-			if _, ok := explicit[flagName]; !ok {
-				*dst = *val
-			}
-		}
-	}
-	setInt := func(flagName string, val *int, dst *int) {
-		if val != nil {
-			if _, ok := explicit[flagName]; !ok {
-				*dst = *val
-			}
-		}
-	}
-	setBool := func(flagName string, val *bool, dst *bool) {
-		if val != nil {
-			if _, ok := explicit[flagName]; !ok {
-				*dst = *val
-			}
-		}
-	}
-	setFloat64 := func(flagName string, val *float64, dst *float64) {
-		if val != nil {
-			if _, ok := explicit[flagName]; !ok {
-				*dst = *val
-			}
-		}
-	}
-
 	// Network
-	setString("a", f.Addr, &cfg.Addr)
-	setInt("p", f.Port, &cfg.Port)
-	setString("certfile", f.CertFile, &cfg.CertFile)
-	setString("keyfile", f.KeyFile, &cfg.KeyFile)
+	setFileOverride("a", f.Addr, &cfg.Addr, explicit)
+	setFileOverride("p", f.Port, &cfg.Port, explicit)
+	setFileOverride("certfile", f.CertFile, &cfg.CertFile, explicit)
+	setFileOverride("keyfile", f.KeyFile, &cfg.KeyFile, explicit)
 
 	// Timeouts
-	setInt("http-read-timeout", f.HTTPReadTimeout, &cfg.HTTPReadTimeout)
-	setInt("http-write-timeout", f.HTTPWriteTimeout, &cfg.HTTPWriteTimeout)
+	setFileOverride("http-read-timeout", f.HTTPReadTimeout, &cfg.HTTPReadTimeout, explicit)
+	setFileOverride("http-write-timeout", f.HTTPWriteTimeout, &cfg.HTTPWriteTimeout, explicit)
 
 	// Logging
-	setString("log-level", f.LogLevel, &cfg.LogLevel)
+	setFileOverride("log-level", f.LogLevel, &cfg.LogLevel, explicit)
 
 	// Routing
-	setString("path-prefix", f.PathPrefix, &cfg.PathPrefix)
+	setFileOverride("path-prefix", f.PathPrefix, &cfg.PathPrefix, explicit)
 
 	// Middleware
-	setBool("cors", f.CORS, &cfg.CORS)
-	setString("key", f.APIKey, &cfg.APIKey)
-	setInt("concurrency", f.Concurrency, &cfg.Concurrency)
-	setInt("burst", f.Burst, &cfg.Burst)
+	setFileOverride("cors", f.CORS, &cfg.CORS, explicit)
+	setFileOverride("key", f.APIKey, &cfg.APIKey, explicit)
+	setFileOverride("concurrency", f.Concurrency, &cfg.Concurrency, explicit)
+	setFileOverride("burst", f.Burst, &cfg.Burst, explicit)
 
 	// Caching
-	setInt("http-cache-ttl", f.HTTPCacheTTL, &cfg.HTTPCacheTTL)
+	setFileOverride("http-cache-ttl", f.HTTPCacheTTL, &cfg.HTTPCacheTTL, explicit)
 
 	// URL source
-	setBool("enable-url-source", f.EnableURLSource, &cfg.EnableURLSource)
-	setBool("enable-auth-forwarding", f.AuthForwarding, &cfg.AuthForwarding)
-	setString("authorization", f.Authorization, &cfg.Authorization)
-	setString("forward-headers", f.ForwardHeaders, &cfg.forwardHeadersRaw)
-	setString("allowed-origins", f.AllowedOrigins, &cfg.allowedOriginsRaw)
-	setInt("max-allowed-size", f.MaxAllowedSize, &cfg.MaxAllowedSize)
-	setFloat64("max-allowed-resolution", f.MaxAllowedPixels, &cfg.MaxAllowedPixels)
-	setBool("enable-url-signature", f.EnableURLSignature, &cfg.EnableURLSignature)
-	setString("url-signature-key", f.URLSignatureKey, &cfg.URLSignatureKey)
+	setFileOverride("enable-url-source", f.EnableURLSource, &cfg.EnableURLSource, explicit)
+	setFileOverride("enable-auth-forwarding", f.AuthForwarding, &cfg.AuthForwarding, explicit)
+	setFileOverride("authorization", f.Authorization, &cfg.Authorization, explicit)
+	setFileOverride("forward-headers", f.ForwardHeaders, &cfg.forwardHeadersRaw, explicit)
+	setFileOverride("allowed-origins", f.AllowedOrigins, &cfg.allowedOriginsRaw, explicit)
+	setFileOverride("max-allowed-size", f.MaxAllowedSize, &cfg.MaxAllowedSize, explicit)
+	setFileOverride("max-allowed-resolution", f.MaxAllowedPixels, &cfg.MaxAllowedPixels, explicit)
+	setFileOverride("enable-url-signature", f.EnableURLSignature, &cfg.EnableURLSignature, explicit)
+	setFileOverride("url-signature-key", f.URLSignatureKey, &cfg.URLSignatureKey, explicit)
 
 	// Filesystem
-	setString("mount", f.Mount, &cfg.Mount)
+	setFileOverride("mount", f.Mount, &cfg.Mount, explicit)
 
 	// Endpoints
-	setString("disable-endpoints", f.DisableEndpoints, &cfg.DisableEndpoints)
+	setFileOverride("disable-endpoints", f.DisableEndpoints, &cfg.DisableEndpoints, explicit)
 
 	// Placeholder
-	setBool("enable-placeholder", f.EnablePlaceholder, &cfg.EnablePlaceholder)
-	setString("placeholder", f.Placeholder, &cfg.Placeholder)
-	setInt("placeholder-status", f.PlaceholderStatus, &cfg.PlaceholderStatus)
+	setFileOverride("enable-placeholder", f.EnablePlaceholder, &cfg.EnablePlaceholder, explicit)
+	setFileOverride("placeholder", f.Placeholder, &cfg.Placeholder, explicit)
+	setFileOverride("placeholder-status", f.PlaceholderStatus, &cfg.PlaceholderStatus, explicit)
 
 	// Resource management
-	setInt("cpus", f.CPUs, &cfg.CPUs)
-	setInt("mrelease", f.MRelease, &cfg.MRelease)
+	setFileOverride("cpus", f.CPUs, &cfg.CPUs, explicit)
+	setFileOverride("mrelease", f.MRelease, &cfg.MRelease, explicit)
 
 	// Response
-	setBool("return-size", f.ReturnSize, &cfg.ReturnSize)
+	setFileOverride("return-size", f.ReturnSize, &cfg.ReturnSize, explicit)
 
 	// Storage
 	if f.Storage != nil {
