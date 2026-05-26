@@ -55,6 +55,10 @@ type Config struct {
 	// Source resolver (wired externally)
 	Resolver *source.Resolver
 
+	// ConcurrencySem is a shared semaphore that limits concurrent image
+	// processing across all routes. Created by Server() when Concurrency > 0.
+	ConcurrencySem chan struct{}
+
 	// HTTP client for fetching remote resources (e.g. watermark images).
 	// If nil, a default client with a 15s timeout is used.
 	RemoteClient *http.Client
@@ -67,6 +71,10 @@ func Server(cfg Config) {
 		}
 	}
 	InitStartTime()
+
+	if cfg.Concurrency > 0 {
+		cfg.ConcurrencySem = make(chan struct{}, cfg.Concurrency)
+	}
 
 	addr := cfg.Addr + ":" + strconv.Itoa(cfg.Port)
 	handler := NewLog(NewServerMux(cfg), os.Stdout, cfg.LogLevel)

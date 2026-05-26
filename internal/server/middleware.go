@@ -62,14 +62,16 @@ func filterEndpoint(next http.Handler, cfg Config) http.Handler {
 }
 
 func throttle(next http.Handler, cfg Config) http.Handler {
-	sem := make(chan struct{}, cfg.Concurrency)
+	sem := cfg.ConcurrencySem
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
 		case sem <- struct{}{}:
 			defer func() { <-sem }()
 			next.ServeHTTP(w, r)
-		case <-r.Context().Done():
-			// Client disconnected while waiting for a slot.
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"Too many requests","status":503}`))
 		}
 	})
 }
