@@ -9,27 +9,25 @@ import (
 )
 
 func TestHTTPStatusFor(t *testing.T) {
-	newErr := img.NewError("test")
-
 	cases := []struct {
 		name   string
 		err    error
 		expect int
 	}{
-		// Transport-layer errors
-		{"unauthorized", &UnauthorizedError{Err: newErr}, http.StatusUnauthorized},
-		{"forbidden", &ForbiddenError{Err: newErr}, http.StatusForbidden},
-		{"method not allowed", &MethodNotAllowedError{Err: newErr}, http.StatusMethodNotAllowed},
+		// Transport-level kinds
+		{"unauthorized", img.New(img.KindUnauthorized, "test"), http.StatusUnauthorized},
+		{"forbidden", img.New(img.KindForbidden, "test"), http.StatusForbidden},
+		{"method not allowed", img.New(img.KindMethodNotAllowed, "test"), http.StatusMethodNotAllowed},
 
-		// Domain-layer errors
-		{"not found", &img.NotFoundError{Err: newErr}, http.StatusNotFound},
-		{"unsupported media", &img.UnsupportedMediaError{Err: newErr}, http.StatusNotAcceptable},
-		{"invalid param", &img.InvalidParamError{Err: newErr}, http.StatusBadRequest},
-		{"empty body", &img.EmptyBodyError{Err: newErr}, http.StatusBadRequest},
-		{"resolution too big", &img.ResolutionTooBigError{Err: newErr}, http.StatusUnprocessableEntity},
-		{"not implemented", &img.NotImplementedError{Err: newErr}, http.StatusNotImplemented},
-		{"processing", &img.ProcessingError{Err: newErr}, http.StatusInternalServerError},
-		{"upstream", &img.UpstreamError{Err: newErr}, http.StatusBadGateway},
+		// Domain-level kinds
+		{"not found", img.New(img.KindNotFound, "test"), http.StatusNotFound},
+		{"unsupported media", img.New(img.KindUnsupportedMedia, "test"), http.StatusNotAcceptable},
+		{"invalid param", img.New(img.KindInvalidParam, "test"), http.StatusBadRequest},
+		{"empty body", img.New(img.KindEmptyBody, "test"), http.StatusBadRequest},
+		{"resolution too big", img.New(img.KindResolutionTooBig, "test"), http.StatusUnprocessableEntity},
+		{"not implemented", img.New(img.KindNotImplemented, "test"), http.StatusNotImplemented},
+		{"processing", img.New(img.KindProcessing, "test"), http.StatusInternalServerError},
+		{"upstream", img.New(img.KindUpstream, "test"), http.StatusBadGateway},
 
 		// Fallback
 		{"unknown error", fmt.Errorf("something broke"), http.StatusInternalServerError},

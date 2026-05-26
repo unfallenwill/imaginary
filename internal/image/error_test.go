@@ -7,8 +7,8 @@ import (
 	"github.com/h2non/imaginary/internal/image"
 )
 
-func TestErrorMessages(t *testing.T) {
-	err := image.NewProcessingError("oops!\n\n")
+func TestErrorMessageSanitized(t *testing.T) {
+	err := image.New(image.KindProcessing, "oops!\n\n")
 	if err.Error() != "oops!" {
 		t.Fatalf("expected 'oops!', got %q", err.Error())
 	}
@@ -34,22 +34,29 @@ func TestSentinelErrors(t *testing.T) {
 	}
 }
 
-func TestErrorAsByType(t *testing.T) {
-	// errors.As should match the specific error type
-	err := image.NewInvalidParamError("bad param")
-	var ipe *image.InvalidParamError
-	if !errors.As(err, &ipe) {
-		t.Error("expected errors.As to extract *image.InvalidParamError")
+func TestErrorKindClassification(t *testing.T) {
+	err := image.New(image.KindInvalidParam, "bad param")
+	var imgErr *image.Error
+	if !errors.As(err, &imgErr) {
+		t.Fatal("expected errors.As to extract *image.Error")
+	}
+	if imgErr.Kind != image.KindInvalidParam {
+		t.Errorf("expected KindInvalidParam, got %v", imgErr.Kind)
 	}
 
-	// The base *image.Error is stored in a named field, not embedded,
-	// so errors.As cannot reach it directly. This is by design —
-	// the server layer matches the outer type, not the inner *Error.
+	// A different kind should not match
+	err2 := image.New(image.KindNotFound, "gone")
+	if !errors.As(err2, &imgErr) {
+		t.Fatal("expected errors.As to extract *image.Error")
+	}
+	if imgErr.Kind == image.KindInvalidParam {
+		t.Error("expected Kind to differ between error instances")
+	}
 }
 
 func TestWrapError(t *testing.T) {
 	inner := errors.New("inner error")
-	wrapped := image.WrapProcessingError("outer", inner)
+	wrapped := image.Wrap(image.KindProcessing, "outer", inner)
 
 	if wrapped.Error() != "outer: inner error" {
 		t.Errorf("expected 'outer: inner error', got %q", wrapped.Error())
@@ -64,33 +71,30 @@ func TestWrapError(t *testing.T) {
 
 func TestWrapErrorChain(t *testing.T) {
 	inner := errors.New("root cause")
-	wrapped := image.WrapNotFoundError("level1", inner)
+	wrapped := image.Wrap(image.KindNotFound, "level1", inner)
 
-	// errors.Is should match the inner error
 	if !errors.Is(wrapped, inner) {
 		t.Error("expected errors.Is to match inner error")
 	}
 
-	// errors.As should extract the specific type
-	var nfe *image.NotFoundError
-	if !errors.As(wrapped, &nfe) {
-		t.Error("expected errors.As to extract *image.NotFoundError from wrapped error")
+	var imgErr *image.Error
+	if !errors.As(wrapped, &imgErr) {
+		t.Fatal("expected errors.As to extract *image.Error from wrapped error")
 	}
-
-	// The base *image.Error is a named field, not embedded, so errors.As
-	// cannot reach it. The server layer matches the outer type (NotFoundError).
+	if imgErr.Kind != image.KindNotFound {
+		t.Errorf("expected KindNotFound, got %v", imgErr.Kind)
+	}
 }
 
-func TestNotFoundErrorIsType(t *testing.T) {
-	err := image.NewNotFoundError("gone")
-	var nfe *image.NotFoundError
-	if !errors.As(err, &nfe) {
-		t.Error("expected errors.As to match NotFoundError")
-	}
+func TestErrorUnwrapToRoot(t *testing.T) {
+	root := errors.New("root")
+	mid := image.Wrap(image.KindProcessing, "mid", root)
+	top := image.Wrap(image.KindUpstream, "top", mid)
 
-	// Should NOT match a different type
-	var ipe *image.InvalidParamError
-	if errors.As(err, &ipe) {
-		t.Error("expected errors.As NOT to match InvalidParamError")
+	if !errors.Is(top, root) {
+		t.Error("expected errors.Is to traverse full chain to root")
+	}
+	if top.Error() != "top: mid: root" {
+		t.Errorf("expected 'top: mid: root', got %q", top.Error())
 	}
 }

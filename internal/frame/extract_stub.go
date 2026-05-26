@@ -15,7 +15,7 @@ type FrameResult struct {
 // Extract returns an error when FFmpeg libraries are not available.
 // Build with `-tags cgo,ffmpeg` to enable video frame extraction.
 func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
-	return FrameResult{}, img.NewNotImplementedError(
+	return FrameResult{}, img.New(img.KindNotImplemented,
 		"Video frame extraction requires FFmpeg (build with -tags cgo,ffmpeg)",
 	)
 }

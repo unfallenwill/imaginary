@@ -77,7 +77,7 @@ func Extract(buf []byte, mediaType MediaType) (MetadataResult, error) {
 	case MediaTypeVideo:
 		return ExtractVideo(buf)
 	default:
-		return MetadataResult{}, img.NewUnsupportedMediaError("Unsupported media type for metadata extraction")
+		return MetadataResult{}, img.New(img.KindUnsupportedMedia, "Unsupported media type for metadata extraction")
 	}
 }
 
@@ -85,7 +85,7 @@ func Extract(buf []byte, mediaType MediaType) (MetadataResult, error) {
 func ExtractImage(buf []byte) (MetadataResult, error) {
 	meta, err := bimg.Metadata(buf)
 	if err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot retrieve image metadata", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot retrieve image metadata", err)
 	}
 
 	imageMeta := ImageMetadata{
@@ -107,7 +107,7 @@ func ExtractImage(buf []byte) (MetadataResult, error) {
 
 	body, err := json.Marshal(result)
 	if err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot serialize image metadata", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot serialize image metadata", err)
 	}
 
 	return MetadataResult{Body: body, Mime: "application/json"}, nil

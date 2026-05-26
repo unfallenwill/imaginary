@@ -59,11 +59,11 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 		}
 		res, err := s.httpClient().Do(req)
 		if err != nil {
-			return nil, image.WrapUpstreamError("error fetching remote http image headers", err)
+			return nil, image.Wrap(image.KindUpstream, "error fetching remote http image headers", err)
 		}
 		_ = res.Body.Close()
 		if res.StatusCode < 200 || res.StatusCode > 206 {
-			return nil, image.NewUpstreamError(fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()))
+			return nil, image.New(image.KindUpstream, fmt.Sprintf("error fetching remote http image headers: (status=%d) (url=%s)", res.StatusCode, req.URL.String()))
 		}
 
 		contentLength, _ := strconv.Atoi(res.Header.Get("Content-Length"))
@@ -78,16 +78,16 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 	}
 	res, err := s.httpClient().Do(req)
 	if err != nil {
-		return nil, image.WrapUpstreamError("error fetching remote http image", err)
+		return nil, image.Wrap(image.KindUpstream, "error fetching remote http image", err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != 200 {
-		return nil, image.NewUpstreamError(fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()))
+		return nil, image.New(image.KindUpstream, fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()))
 	}
 
 	buf, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, image.WrapUpstreamError(fmt.Sprintf("unable to read image from response body (url=%s)", req.URL.String()), err)
+		return nil, image.Wrap(image.KindUpstream, fmt.Sprintf("unable to read image from response body (url=%s)", req.URL.String()), err)
 	}
 	return buf, nil
 }
@@ -121,7 +121,7 @@ func parseURL(request *http.Request) (*url.URL, error) {
 func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ireq.Context(), method, url.String(), nil)
 	if err != nil {
-		return nil, image.WrapInvalidParamError("invalid request URL", err)
+		return nil, image.Wrap(image.KindInvalidParam, "invalid request URL", err)
 	}
 	req.Header.Set("User-Agent", "imaginary/"+version.Version)
 	req.URL = url

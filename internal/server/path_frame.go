@@ -52,10 +52,10 @@ func parsePathFrameKey(requestPath, prefix string) (string, error) {
 	pattern := framePathPattern(prefix)
 	key := strings.TrimPrefix(requestPath, pattern)
 	if key == "" {
-		return "", img.NewInvalidParamError("invalid frame path: missing object key")
+		return "", img.New(img.KindInvalidParam, "invalid frame path: missing object key")
 	}
 	if err := source.ValidateObjectKey(key); err != nil {
-		return "", img.NewInvalidParamError("invalid object key")
+		return "", img.New(img.KindInvalidParam, "invalid object key")
 	}
 	return key, nil
 }

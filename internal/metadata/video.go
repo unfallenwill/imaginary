@@ -19,32 +19,32 @@ const durationTimeBase = float64(astiav.TimeBase) // AV_TIME_BASE = 1,000,000
 func ExtractVideo(buf []byte) (MetadataResult, error) {
 	formatCtx := astiav.AllocFormatContext()
 	if formatCtx == nil {
-		return MetadataResult{}, img.NewProcessingError("Cannot allocate format context")
+		return MetadataResult{}, img.New(img.KindProcessing, "Cannot allocate format context")
 	}
 	defer formatCtx.Free()
 
 	ioCtx, err := avio.NewMemoryIOContext(buf)
 	if err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot create IO context", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot create IO context", err)
 	}
 	defer ioCtx.Free()
 
 	formatCtx.SetPb(ioCtx)
 
 	if err := formatCtx.OpenInput("", nil, nil); err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot open video", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot open video", err)
 	}
 	defer formatCtx.CloseInput()
 
 	if err := formatCtx.FindStreamInfo(nil); err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot find stream info", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot find stream info", err)
 	}
 
 	result := buildVideoMetadata(formatCtx, len(buf))
 
 	body, err := json.Marshal(result)
 	if err != nil {
-		return MetadataResult{}, img.WrapProcessingError("Cannot serialize video metadata", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot serialize video metadata", err)
 	}
 
 	return MetadataResult{Body: body, Mime: "application/json"}, nil

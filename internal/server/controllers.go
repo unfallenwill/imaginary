@@ -138,14 +138,14 @@ func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWr
 		if t := req.URL.Query().Get("time"); t != "" {
 			timeSeconds, err = strconv.ParseFloat(t, 64)
 			if err != nil || timeSeconds < 0 {
-				ErrorReply(w, req, img.NewInvalidParamError("Invalid time parameter: must be a non-negative number"), cfg.Error)
+				ErrorReply(w, req, img.New(img.KindInvalidParam, "Invalid time parameter: must be a non-negative number"), cfg.Error)
 				return
 			}
 		}
 
 		mediaType := detectMediaType(buf)
 		if mediaType != metadata.MediaTypeVideo {
-			ErrorReply(w, req, img.NewUnsupportedMediaError("Frame extraction requires a video input"), cfg.Error)
+			ErrorReply(w, req, img.New(img.KindUnsupportedMedia, "Frame extraction requires a video input"), cfg.Error)
 			return
 		}
 
@@ -285,7 +285,7 @@ func checkResolution(buf []byte, maxPixels float64) error {
 	}
 	sizeInfo, err := bimg.Size(buf)
 	if err != nil {
-		return img.WrapProcessingError("cannot determine image size", err)
+		return img.Wrap(img.KindProcessing, "cannot determine image size", err)
 	}
 	imgResolution := float64(sizeInfo.Width) * float64(sizeInfo.Height)
 	if (imgResolution / megaPixel) > maxPixels {
@@ -329,7 +329,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 
 	opts, err := img.BuildParamsFromQuery(map[string][]string(r.URL.Query()))
 	if err != nil {
-		ErrorReply(w, r, img.WrapInvalidParamError("invalid image parameters", err), cfg.Error)
+		ErrorReply(w, r, img.Wrap(img.KindInvalidParam, "invalid image parameters", err), cfg.Error)
 		return
 	}
 
@@ -428,17 +428,17 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, imageURL, nil) // #nosec G704 -- imageURL is validated by the allowed-origins whitelist in the source layer
 	if err != nil {
-		return nil, img.WrapInvalidParamError("invalid watermark URL", err)
+		return nil, img.Wrap(img.KindInvalidParam, "invalid watermark URL", err)
 	}
 
 	resp, err := client.Do(req) // #nosec G704 -- see above
 	if err != nil {
-		return nil, img.WrapUpstreamError("fetch failed", err)
+		return nil, img.Wrap(img.KindUpstream, "fetch failed", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, img.NewUpstreamError(fmt.Sprintf("remote returned status %d", resp.StatusCode))
+		return nil, img.New(img.KindUpstream, fmt.Sprintf("remote returned status %d", resp.StatusCode))
 	}
 
 	var reader io.Reader = resp.Body
@@ -450,7 +450,7 @@ func fetchRemoteImage(client *http.Client, ctx context.Context, imageURL string,
 
 	buf, err := io.ReadAll(reader)
 	if err != nil {
-		return nil, img.WrapUpstreamError("read body", err)
+		return nil, img.Wrap(img.KindUpstream, "read body", err)
 	}
 	if len(buf) == 0 {
 		return nil, img.ErrEmptyBody

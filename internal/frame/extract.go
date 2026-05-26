@@ -26,31 +26,31 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 	// 1. Open format context with memory I/O
 	formatCtx := astiav.AllocFormatContext()
 	if formatCtx == nil {
-		return FrameResult{}, img.NewProcessingError("Cannot allocate format context")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot allocate format context")
 	}
 	defer formatCtx.Free()
 
 	ioCtx, err := avio.NewMemoryIOContext(buf)
 	if err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot create IO context", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot create IO context", err)
 	}
 	defer ioCtx.Free()
 
 	formatCtx.SetPb(ioCtx)
 
 	if err := formatCtx.OpenInput("", nil, nil); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot open video", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot open video", err)
 	}
 	defer formatCtx.CloseInput()
 
 	if err := formatCtx.FindStreamInfo(nil); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot find stream info", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot find stream info", err)
 	}
 
 	// 2. Find best video stream
 	videoStream, suggestedCodec, err := formatCtx.FindBestStream(astiav.MediaTypeVideo, -1, -1)
 	if err != nil {
-		return FrameResult{}, img.NewUnsupportedMediaError("No video stream found")
+		return FrameResult{}, img.New(img.KindUnsupportedMedia, "No video stream found")
 	}
 
 	// 3. Open codec context
@@ -59,21 +59,21 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 		decoder = astiav.FindDecoder(videoStream.CodecParameters().CodecID())
 	}
 	if decoder == nil {
-		return FrameResult{}, img.NewUnsupportedMediaError("Cannot find decoder for video stream")
+		return FrameResult{}, img.New(img.KindUnsupportedMedia, "Cannot find decoder for video stream")
 	}
 
 	codecCtx := astiav.AllocCodecContext(decoder)
 	if codecCtx == nil {
-		return FrameResult{}, img.NewProcessingError("Cannot allocate codec context")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot allocate codec context")
 	}
 	defer codecCtx.Free()
 
 	if err := videoStream.CodecParameters().ToCodecContext(codecCtx); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot copy codec parameters", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot copy codec parameters", err)
 	}
 
 	if err := codecCtx.Open(decoder, nil); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot open codec", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot open codec", err)
 	}
 
 	// 4. Seek to requested timestamp (if not zero)
@@ -95,13 +95,13 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 	// 5. Read packets and decode until we get a frame
 	packet := astiav.AllocPacket()
 	if packet == nil {
-		return FrameResult{}, img.NewProcessingError("Cannot allocate packet")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot allocate packet")
 	}
 	defer packet.Free()
 
 	decodedFrame := astiav.AllocFrame()
 	if decodedFrame == nil {
-		return FrameResult{}, img.NewProcessingError("Cannot allocate frame")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot allocate frame")
 	}
 	defer decodedFrame.Free()
 
@@ -114,7 +114,7 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 			if err == io.EOF {
 				break
 			}
-			return FrameResult{}, img.WrapProcessingError("Error reading packet", err)
+			return FrameResult{}, img.Wrap(img.KindProcessing, "Error reading packet", err)
 		}
 
 		if packet.StreamIndex() != streamIndex {
@@ -124,7 +124,7 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 
 		if err := codecCtx.SendPacket(packet); err != nil {
 			packet.Unref()
-			return FrameResult{}, img.WrapProcessingError("Error sending packet to decoder", err)
+			return FrameResult{}, img.Wrap(img.KindProcessing, "Error sending packet to decoder", err)
 		}
 		packet.Unref()
 
@@ -138,7 +138,7 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 	}
 
 	if !gotFrame {
-		return FrameResult{}, img.NewProcessingError("Cannot decode video frame")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot decode video frame")
 	}
 
 	// 6. Convert pixel format to RGBA via SWSContext
@@ -151,29 +151,29 @@ func Extract(buf []byte, timeSeconds float64) (FrameResult, error) {
 		astiav.NewSoftwareScaleContextFlags(astiav.SoftwareScaleContextFlagBilinear),
 	)
 	if err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot create scale context", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot create scale context", err)
 	}
 	defer swsCtx.Free()
 
 	dstFrame := astiav.AllocFrame()
 	if dstFrame == nil {
-		return FrameResult{}, img.NewProcessingError("Cannot allocate destination frame")
+		return FrameResult{}, img.New(img.KindProcessing, "Cannot allocate destination frame")
 	}
 	defer dstFrame.Free()
 
 	if err := swsCtx.ScaleFrame(decodedFrame, dstFrame); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot scale frame", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot scale frame", err)
 	}
 
 	// 7. Convert to Go image and encode as JPEG
 	rgba := image.NewNRGBA(image.Rect(0, 0, dstWidth, dstHeight))
 	if err := dstFrame.Data().ToImage(rgba); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot convert frame to image", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot convert frame to image", err)
 	}
 
 	var jpegBuf bytes.Buffer
 	if err := jpeg.Encode(&jpegBuf, rgba, &jpeg.Options{Quality: 90}); err != nil {
-		return FrameResult{}, img.WrapProcessingError("Cannot encode JPEG", err)
+		return FrameResult{}, img.Wrap(img.KindProcessing, "Cannot encode JPEG", err)
 	}
 
 	return FrameResult{

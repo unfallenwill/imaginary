@@ -9,5 +9,5 @@ import (
 // ExtractVideo returns an error when FFmpeg libraries are not available.
 // Build with `-tags cgo,ffmpeg` to enable video metadata extraction.
 func ExtractVideo(buf []byte) (MetadataResult, error) {
-	return MetadataResult{}, img.NewNotImplementedError("Video metadata extraction requires FFmpeg (build with -tags cgo,ffmpeg)")
+	return MetadataResult{}, img.New(img.KindNotImplemented, "Video metadata extraction requires FFmpeg (build with -tags cgo,ffmpeg)")
 }
