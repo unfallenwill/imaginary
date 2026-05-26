@@ -170,19 +170,19 @@ func (p PipelineParams) ToImageOptions() ImageOptions {
 	}
 
 	if p.Color != "" {
-		opts.Color = parseColor(p.Color)
+		opts.Color = ParseColor(p.Color)
 	}
 	if p.Background != "" {
-		opts.Background = parseColor(p.Background)
+		opts.Background = ParseColor(p.Background)
 	}
 	if p.Colorspace != "" {
-		opts.Colorspace = parseColorspace(p.Colorspace)
+		opts.Colorspace = ParseColorspace(p.Colorspace)
 	}
 	if p.Gravity != "" {
-		opts.Gravity = parseGravity(p.Gravity)
+		opts.Gravity = ParseGravity(p.Gravity)
 	}
 	if p.Extend != "" {
-		opts.Extend = parseExtendMode(p.Extend)
+		opts.Extend = ParseExtendMode(p.Extend)
 	}
 
 	return opts

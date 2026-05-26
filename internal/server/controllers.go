@@ -327,7 +327,7 @@ func imageHandler(w http.ResponseWriter, r *http.Request, buf []byte, operation 
 		return
 	}
 
-	opts, err := img.BuildParamsFromQuery(map[string][]string(r.URL.Query()))
+	opts, err := BuildParamsFromQuery(map[string][]string(r.URL.Query()))
 	if err != nil {
 		ErrorReply(w, r, img.Wrap(img.KindInvalidParam, "invalid image parameters", err), cfg.Error)
 		return
