@@ -36,7 +36,7 @@ func TestFrameMissingSource(t *testing.T) {
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -139,7 +139,7 @@ func testFrameConfig() Config {
 		PathPrefix:       "/",
 		MaxAllowedPixels: 18.0,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -277,7 +277,7 @@ func testPathFrameConfig(body []byte) Config {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    obj,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(obj, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),

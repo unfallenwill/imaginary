@@ -12,7 +12,7 @@ import (
 
 func TestResolverMatch(t *testing.T) {
 	resolver := source.NewResolver(
-		bodysource.NewBodyImageSource(),
+		bodysource.NewBodyImageSource(0),
 		httpsource.NewHTTPImageSource(httpsource.Config{}),
 	)
 

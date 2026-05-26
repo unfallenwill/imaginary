@@ -165,7 +165,7 @@ func resolveObjectStorage(cfg config.Config) (source.ObjectStorage, error) {
 
 func buildResolver(cfg config.Config, objectStorage source.ObjectStorage) *source.Resolver {
 	return source.NewResolver(
-		bodysource.NewBodyImageSource(),
+		bodysource.NewBodyImageSource(cfg.MaxAllowedSize),
 		objectsource.NewObjectImageSource(objectStorage, cfg.MaxAllowedSize),
 		fssource.NewFileSystemImageSource(cfg.Mount),
 		httpsource.NewHTTPImageSource(httpsource.Config{

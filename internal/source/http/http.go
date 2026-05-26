@@ -16,6 +16,10 @@ import (
 
 const URLQueryKey = "url"
 
+// defaultMaxBodySize is the default maximum response body size (100 MB)
+// when MaxAllowedSize is not explicitly configured.
+const defaultMaxBodySize = 100 * 1024 * 1024
+
 // Config holds configuration for the HTTP image source.
 type Config struct {
 	AuthForwarding bool
@@ -94,11 +98,25 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 		return nil, image.New(image.KindUpstream, fmt.Sprintf("error fetching remote http image: (status=%d) (url=%s)", res.StatusCode, req.URL.String()))
 	}
 
-	buf, err := io.ReadAll(res.Body)
+	var reader io.Reader = res.Body
+	limit := s.maxAllowedSize()
+	reader = io.LimitReader(reader, int64(limit)+1)
+
+	buf, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, image.Wrap(image.KindUpstream, fmt.Sprintf("unable to read image from response body (url=%s)", req.URL.String()), err)
 	}
+	if len(buf) > limit {
+		return nil, image.ErrContentTooLarge
+	}
 	return buf, nil
+}
+
+func (s *HTTPImageSource) maxAllowedSize() int {
+	if s.Config.MaxAllowedSize > 0 {
+		return s.Config.MaxAllowedSize
+	}
+	return defaultMaxBodySize
 }
 
 func (s *HTTPImageSource) setAuthorizationHeader(req *http.Request, ireq *http.Request) {

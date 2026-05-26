@@ -216,7 +216,7 @@ func TestRemoteHTTPSource(t *testing.T) {
 		MaxAllowedSize:   0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -266,7 +266,7 @@ func TestInvalidRemoteHTTPSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -299,7 +299,7 @@ func TestMountDirectory(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource("../../testdata"),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -343,7 +343,7 @@ func TestMountInvalidDirectory(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		PathPrefix:       "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource("_invalid_"),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -369,7 +369,7 @@ func TestMountInvalidPath(t *testing.T) {
 		Mount:      "_invalid_",
 		PathPrefix: "/",
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(nil, 0),
 			fssource.NewFileSystemImageSource("_invalid_"),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -491,7 +491,7 @@ func TestObjectStorageSource(t *testing.T) {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    fakeObjectStorage{body: buf},
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(fakeObjectStorage{body: buf}, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
@@ -566,7 +566,7 @@ func testConfigWithObjectStorage(body []byte) Config {
 		MaxAllowedPixels: 18.0,
 		ObjectStorage:    obj,
 		Resolver: source.NewResolver(
-			bodysource.NewBodyImageSource(),
+			bodysource.NewBodyImageSource(0),
 			objectsource.NewObjectImageSource(obj, 0),
 			fssource.NewFileSystemImageSource(""),
 			httpsource.NewHTTPImageSource(httpsource.Config{}),
