@@ -23,7 +23,7 @@ func (s *ObjectImageSource) Matches(r *http.Request) bool {
 	return r.Method == http.MethodGet && r.URL.Query().Get(ObjectQueryKey) != ""
 }
 
-func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
+func (s *ObjectImageSource) GetImage(ctx context.Context, r *http.Request) ([]byte, error) {
 	if s.storage == nil {
 		return nil, image.ErrMissingImageSource
 	}
@@ -32,9 +32,6 @@ func (s *ObjectImageSource) GetImage(r *http.Request) ([]byte, error) {
 	if err := source.ValidateObjectKey(key); err != nil {
 		return nil, image.ErrInvalidFilePath
 	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), source.ObjectStorageTimeout)
-	defer cancel()
 
 	body, contentLength, err := s.storage.Open(ctx, key)
 	if err != nil {

@@ -1,6 +1,7 @@
 package httpsource
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -67,7 +68,7 @@ func TestHttpImageSource(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		body, err = source.GetImage(r)
+		body, err = source.GetImage(context.Background(), r)
 		if err != nil {
 			t.Fatalf("Error while reading the body: %s", err)
 		}
@@ -99,7 +100,7 @@ func TestHttpImageSourceAllowedOrigin(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		body, err := source.GetImage(r)
+		body, err := source.GetImage(context.Background(), r)
 		if err != nil {
 			t.Fatalf("Error while reading the body: %s", err)
 		}
@@ -125,7 +126,7 @@ func TestHttpImageSourceNotAllowedOrigin(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		_, err := source.GetImage(r)
+		_, err := source.GetImage(context.Background(), r)
 		if err == nil {
 			t.Fatal("Error cannot be empty")
 		}
@@ -204,7 +205,7 @@ func TestHttpImageSourceNotForwardHeaders(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(context.Background(), source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("Not-Forward") != "" {
 		t.Fatal("Forwarded unspecified header")
@@ -227,7 +228,7 @@ func TestHttpImageSourceForwardedHeadersNotOverride(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(context.Background(), source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("Authorization") != "ValidAPIKey" {
 		t.Fatal("Authorization header override")
@@ -250,7 +251,7 @@ func TestHttpImageSourceCaseSensitivityInForwardedHeaders(t *testing.T) {
 		t.Fatal("Cannot match the request")
 	}
 
-	oreq, _ := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, _ := newHTTPRequest(context.Background(), source, r, http.MethodGet, testURL)
 
 	if oreq.Header.Get("X-Custom") == "" {
 		t.Fatal("Case sensitive not working on forwarded headers")
@@ -274,7 +275,7 @@ func TestHttpImageSourceEmptyForwardedHeaders(t *testing.T) {
 		t.Fatal("Set empty custom header")
 	}
 
-	oreq, err := newHTTPRequest(source, r, http.MethodGet, testURL)
+	oreq, err := newHTTPRequest(context.Background(), source, r, http.MethodGet, testURL)
 
 	if oreq == nil || err != nil {
 		t.Fatal("Error creating request using empty custom headers")
@@ -296,7 +297,7 @@ func TestHttpImageSourceError(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		_, err = source.GetImage(r)
+		_, err = source.GetImage(context.Background(), r)
 		if err == nil {
 			t.Fatalf("Server response should not be valid: %s", err)
 		}
@@ -325,7 +326,7 @@ func TestHttpImageSourceExceedsMaximumAllowedLength(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		body, err = source.GetImage(r)
+		body, err = source.GetImage(context.Background(), r)
 		if err == nil {
 			t.Fatalf("It should not allow a request to image exceeding maximum allowed size: %s", err)
 		}

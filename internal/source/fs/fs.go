@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"os"
@@ -27,7 +28,7 @@ func (s *FileSystemImageSource) Matches(r *http.Request) bool {
 	return r.Method == http.MethodGet && file != ""
 }
 
-func (s *FileSystemImageSource) GetImage(r *http.Request) ([]byte, error) {
+func (s *FileSystemImageSource) GetImage(ctx context.Context, r *http.Request) ([]byte, error) {
 	file, err := s.getFileParam(r)
 	if err != nil {
 		return nil, err

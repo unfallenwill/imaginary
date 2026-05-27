@@ -1,6 +1,7 @@
 package httpsource
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,7 +54,7 @@ var defaultHTTPClient = &http.Client{
 	Timeout: 30 * time.Second,
 }
 
-func (s *HTTPImageSource) GetImage(req *http.Request) ([]byte, error) {
+func (s *HTTPImageSource) GetImage(ctx context.Context, req *http.Request) ([]byte, error) {
 	u, err := parseURL(req)
 	if err != nil {
 		return nil, image.ErrInvalidImageURL
@@ -61,12 +62,12 @@ func (s *HTTPImageSource) GetImage(req *http.Request) ([]byte, error) {
 	if shouldRestrictOrigin(u, s.Config.AllowedOrigins) {
 		return nil, image.ErrOriginNotAllowed
 	}
-	return s.fetchImage(u, req)
+	return s.fetchImage(ctx, u, req)
 }
 
-func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, error) {
+func (s *HTTPImageSource) fetchImage(ctx context.Context, url *url.URL, ireq *http.Request) ([]byte, error) {
 	if s.Config.MaxAllowedSize > 0 {
-		req, err := newHTTPRequest(s, ireq, http.MethodHead, url)
+		req, err := newHTTPRequest(ctx, s, ireq, http.MethodHead, url)
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +86,7 @@ func (s *HTTPImageSource) fetchImage(url *url.URL, ireq *http.Request) ([]byte, 
 		}
 	}
 
-	req, err := newHTTPRequest(s, ireq, http.MethodGet, url)
+	req, err := newHTTPRequest(ctx, s, ireq, http.MethodGet, url)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +146,8 @@ func parseURL(request *http.Request) (*url.URL, error) {
 	return url.Parse(request.URL.Query().Get(URLQueryKey))
 }
 
-func newHTTPRequest(s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ireq.Context(), method, url.String(), nil)
+func newHTTPRequest(ctx context.Context, s *HTTPImageSource, ireq *http.Request, method string, url *url.URL) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url.String(), nil)
 	if err != nil {
 		return nil, image.Wrap(image.KindInvalidParam, "invalid request URL", err)
 	}

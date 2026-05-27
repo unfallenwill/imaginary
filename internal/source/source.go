@@ -25,7 +25,7 @@ type ObjectStorage interface {
 
 type ImageSource interface {
 	Matches(*http.Request) bool
-	GetImage(*http.Request) ([]byte, error)
+	GetImage(ctx context.Context, req *http.Request) ([]byte, error)
 }
 
 // Resolver matches incoming requests to configured image sources.

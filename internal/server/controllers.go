@@ -60,7 +60,7 @@ func imageController(cfg Config, resolver *source.Resolver, operation img.Operat
 			return
 		}
 
-		buf, err := imageSource.GetImage(req)
+		buf, err := imageSource.GetImage(req.Context(), req)
 		if err != nil {
 			ErrorReply(w, req, err, cfg.Error)
 			return
@@ -87,7 +87,7 @@ func metadataController(cfg Config, resolver *source.Resolver) func(http.Respons
 			return
 		}
 
-		buf, err := imageSource.GetImage(req)
+		buf, err := imageSource.GetImage(req.Context(), req)
 		if err != nil {
 			ErrorReply(w, req, err, cfg.Error)
 			return
@@ -123,7 +123,7 @@ func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWr
 			return
 		}
 
-		buf, err := imageSource.GetImage(req)
+		buf, err := imageSource.GetImage(req.Context(), req)
 		if err != nil {
 			ErrorReply(w, req, err, cfg.Error)
 			return

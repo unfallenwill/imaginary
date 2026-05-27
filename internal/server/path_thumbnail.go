@@ -52,7 +52,7 @@ func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.Re
 			return
 		}
 
-		buf, err := imageSource.GetImage(req)
+		buf, err := imageSource.GetImage(req.Context(), req)
 		if err != nil {
 			ErrorReply(w, r, err, cfg.Error)
 			return

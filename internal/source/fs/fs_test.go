@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,7 +19,7 @@ func TestFileSystemImageSource(t *testing.T) {
 			t.Fatal("Cannot match the request")
 		}
 
-		body, err = src.GetImage(r)
+		body, err = src.GetImage(context.Background(), r)
 		if err != nil {
 			t.Fatalf("Error while reading the body: %s", err)
 		}

@@ -1,6 +1,7 @@
 package body
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -28,7 +29,7 @@ func (s *BodyImageSource) Matches(r *http.Request) bool {
 	return r.Method == http.MethodPost || r.Method == http.MethodPut
 }
 
-func (s *BodyImageSource) GetImage(r *http.Request) ([]byte, error) {
+func (s *BodyImageSource) GetImage(ctx context.Context, r *http.Request) ([]byte, error) {
 	if isFormBody(r) {
 		return readFormBody(r, s.maxSize())
 	}
