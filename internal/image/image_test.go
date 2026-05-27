@@ -18,11 +18,11 @@ func TestImageOperations(t *testing.T) {
 		expectW int
 		expectH int
 	}{
-		{"Resize/BothDims", Resize, ImageOptions{Width: 300, Height: 300}, 300, 300},
-		{"Resize/WidthOnly", Resize, ImageOptions{Width: 300}, 300, 404},
-		{"Resize/NoCropFalse", Resize, ImageOptions{Width: 300, NoCrop: boolPtr(false)}, 300, 740},
-		{"Resize/NoCropTrue", Resize, ImageOptions{Width: 300, NoCrop: boolPtr(true)}, 300, 404},
-		{"Fit", Fit, ImageOptions{Width: 300, Height: 300}, 223, 300},
+		{"Resize/BothDims", Resize, ImageOptions{Dimensions: Dimensions{Width: 300, Height: 300}}, 300, 300},
+		{"Resize/WidthOnly", Resize, ImageOptions{Dimensions: Dimensions{Width: 300}}, 300, 404},
+		{"Resize/NoCropFalse", Resize, ImageOptions{Dimensions: Dimensions{Width: 300}, Flags: Flags{NoCrop: boolPtr(false)}}, 300, 740},
+		{"Resize/NoCropTrue", Resize, ImageOptions{Dimensions: Dimensions{Width: 300}, Flags: Flags{NoCrop: boolPtr(true)}}, 300, 404},
+		{"Fit", Fit, ImageOptions{Dimensions: Dimensions{Width: 300, Height: 300}}, 223, 300},
 		{"AutoRotate", AutoRotate, ImageOptions{}, 550, 740},
 	}
 
@@ -63,7 +63,7 @@ func TestImagePipelineOperations(t *testing.T) {
 		},
 	}
 
-	opts := ImageOptions{Operations: operations}
+	opts := ImageOptions{PipelineOpts: PipelineOpts{Operations: operations}}
 	buf, _ := io.ReadAll(readImageFile("imaginary.jpg"))
 
 	img, err := Pipeline(buf, opts)

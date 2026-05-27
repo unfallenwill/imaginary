@@ -20,9 +20,8 @@ type BimgResizer struct{}
 // and output type, returning the resized bytes and MIME type.
 func (BimgResizer) ResizePlaceholder(buf []byte, width, height int, imageType string) ([]byte, string, error) {
 	opts := BimgOptions(ImageOptions{
-		Width:  width,
-		Height: height,
-		Type:   imageType,
+		Dimensions: Dimensions{Width: width, Height: height},
+		Type:       imageType,
 	})
 	opts.Force = true
 	opts.Crop = true

@@ -7,22 +7,44 @@ import (
 	"github.com/h2non/bimg"
 )
 
-// ImageOptions represent all the supported image transformation params as first level members.
-// Boolean fields use *bool so that "explicitly set to false" can be distinguished from "not set".
-type ImageOptions struct {
-	Width         int
-	Height        int
-	AreaWidth     int
-	AreaHeight    int
-	Quality       int
-	Compression   int
-	Rotate        int
-	Top           int
-	Left          int
-	Margin        int
-	Factor        int
-	DPI           int
-	TextWidth     int
+// Dimensions groups size and position related fields.
+type Dimensions struct {
+	Width      int
+	Height     int
+	AreaWidth  int
+	AreaHeight int
+	Top        int
+	Left       int
+	Margin     int
+}
+
+// Quality groups quality and compression related fields.
+type Quality struct {
+	Quality     int
+	Compression int
+	Speed       int
+}
+
+// Effects groups visual effect related fields.
+type Effects struct {
+	Sigma   float64
+	MinAmpl float64
+	Opacity float32
+}
+
+// WatermarkOpts groups watermark text and image related fields.
+type WatermarkOpts struct {
+	Text       string
+	Font       string
+	DPI        int
+	TextWidth  int
+	Image      string
+	ImageBytes []byte
+	Color      []uint8
+}
+
+// Flags groups boolean toggle fields.
+type Flags struct {
 	Flip          *bool
 	Flop          *bool
 	Force         *bool
@@ -32,24 +54,37 @@ type ImageOptions struct {
 	NoRotation    *bool
 	NoProfile     *bool
 	StripMetadata *bool
-	Opacity       float32
-	Sigma         float64
-	MinAmpl       float64
-	Text          string
-	Image         string
-	ImageBytes    []byte
-	Font          string
-	Type          string
-	AspectRatio   string
-	Color         []uint8
-	Background    []uint8
 	Interlace     *bool
 	Palette       *bool
-	Speed         int
-	Extend        bimg.Extend
-	Gravity       bimg.Gravity
-	Colorspace    bimg.Interpretation
-	Operations    PipelineOperations
+}
+
+// Transform groups transformation related fields.
+type Transform struct {
+	Rotate      int
+	Factor      int
+	AspectRatio string
+	Extend      bimg.Extend
+	Gravity     bimg.Gravity
+	Colorspace  bimg.Interpretation
+	Background  []uint8
+}
+
+// PipelineOpts groups pipeline operations.
+type PipelineOpts struct {
+	Operations PipelineOperations
+}
+
+// ImageOptions represent all the supported image transformation params.
+// Boolean fields use *bool so that "explicitly set to false" can be distinguished from "not set".
+type ImageOptions struct {
+	Dimensions
+	Quality
+	Effects
+	WatermarkOpts
+	Flags
+	Transform
+	PipelineOpts
+	Type string
 }
 
 // boolPtr returns a pointer to the given bool value.
@@ -132,57 +167,69 @@ func derefFloat64(p *float64) float64 {
 // ToImageOptions converts PipelineParams to ImageOptions, applying defaults.
 func (p PipelineParams) ToImageOptions() ImageOptions {
 	opts := ImageOptions{
-		Extend:        bimg.ExtendCopy,
-		Width:         derefInt(p.Width),
-		Height:        derefInt(p.Height),
-		Top:           derefInt(p.Top),
-		Left:          derefInt(p.Left),
-		AreaWidth:     derefInt(p.AreaWidth),
-		AreaHeight:    derefInt(p.AreaHeight),
-		Quality:       derefInt(p.Quality),
-		Compression:   derefInt(p.Compression),
-		Rotate:        derefInt(p.Rotate),
-		Margin:        derefInt(p.Margin),
-		Factor:        derefInt(p.Factor),
-		DPI:           derefInt(p.DPI),
-		TextWidth:     derefInt(p.TextWidth),
-		Speed:         derefInt(p.Speed),
-		Opacity:       float32(derefFloat64(p.Opacity)),
-		Sigma:         derefFloat64(p.Sigma),
-		MinAmpl:       derefFloat64(p.MinAmpl),
-		Flip:          p.Flip,
-		Flop:          p.Flop,
-		NoCrop:        p.NoCrop,
-		NoProfile:     p.NoProfile,
-		NoRotation:    p.NoRotation,
-		NoReplicate:   p.NoReplicate,
-		Force:         p.Force,
-		Embed:         p.Embed,
-		StripMetadata: p.StripMeta,
-		Interlace:     p.Interlace,
-		Palette:       p.Palette,
-		Text:          p.Text,
-		Image:         p.Image,
-		ImageBytes:    p.ImageBytes,
-		Font:          p.Font,
-		Type:          p.Type,
-		AspectRatio:   p.AspectRatio,
+		Dimensions: Dimensions{
+			Width:      derefInt(p.Width),
+			Height:     derefInt(p.Height),
+			Top:        derefInt(p.Top),
+			Left:       derefInt(p.Left),
+			AreaWidth:  derefInt(p.AreaWidth),
+			AreaHeight: derefInt(p.AreaHeight),
+			Margin:     derefInt(p.Margin),
+		},
+		Quality: Quality{
+			Quality:     derefInt(p.Quality),
+			Compression: derefInt(p.Compression),
+			Speed:       derefInt(p.Speed),
+		},
+		Transform: Transform{
+			Extend:      bimg.ExtendCopy,
+			Rotate:      derefInt(p.Rotate),
+			Factor:      derefInt(p.Factor),
+			AspectRatio: p.AspectRatio,
+		},
+		Effects: Effects{
+			Opacity: float32(derefFloat64(p.Opacity)),
+			Sigma:   derefFloat64(p.Sigma),
+			MinAmpl: derefFloat64(p.MinAmpl),
+		},
+		Flags: Flags{
+			Flip:          p.Flip,
+			Flop:          p.Flop,
+			NoCrop:        p.NoCrop,
+			NoProfile:     p.NoProfile,
+			NoRotation:    p.NoRotation,
+			NoReplicate:   p.NoReplicate,
+			Force:         p.Force,
+			Embed:         p.Embed,
+			StripMetadata: p.StripMeta,
+			Interlace:     p.Interlace,
+			Palette:       p.Palette,
+		},
+		WatermarkOpts: WatermarkOpts{
+			Text:       p.Text,
+			Image:      p.Image,
+			ImageBytes: p.ImageBytes,
+			Font:       p.Font,
+			DPI:        derefInt(p.DPI),
+			TextWidth:  derefInt(p.TextWidth),
+		},
+		Type: p.Type,
 	}
 
 	if p.Color != "" {
-		opts.Color = ParseColor(p.Color)
+		opts.WatermarkOpts.Color = ParseColor(p.Color)
 	}
 	if p.Background != "" {
-		opts.Background = ParseColor(p.Background)
+		opts.Transform.Background = ParseColor(p.Background)
 	}
 	if p.Colorspace != "" {
-		opts.Colorspace = ParseColorspace(p.Colorspace)
+		opts.Transform.Colorspace = ParseColorspace(p.Colorspace)
 	}
 	if p.Gravity != "" {
-		opts.Gravity = ParseGravity(p.Gravity)
+		opts.Transform.Gravity = ParseGravity(p.Gravity)
 	}
 	if p.Extend != "" {
-		opts.Extend = ParseExtendMode(p.Extend)
+		opts.Transform.Extend = ParseExtendMode(p.Extend)
 	}
 
 	return opts
@@ -239,42 +286,42 @@ func shouldTransformByAspectRatio(height, width int) bool {
 // BimgOptions creates a new bimg compatible options struct mapping the fields properly
 func BimgOptions(o ImageOptions) bimg.Options {
 	opts := bimg.Options{
-		Width:          o.Width,
-		Height:         o.Height,
-		Flip:           derefBool(o.Flip, false),
-		Flop:           derefBool(o.Flop, false),
-		Quality:        o.Quality,
-		Compression:    o.Compression,
-		NoAutoRotate:   derefBool(o.NoRotation, false),
-		NoProfile:      derefBool(o.NoProfile, false),
-		Force:          derefBool(o.Force, false),
-		Gravity:        o.Gravity,
-		Embed:          derefBool(o.Embed, false),
-		Extend:         o.Extend,
-		Interpretation: o.Colorspace,
-		StripMetadata:  derefBool(o.StripMetadata, false),
+		Width:          o.Dimensions.Width,
+		Height:         o.Dimensions.Height,
+		Flip:           derefBool(o.Flags.Flip, false),
+		Flop:           derefBool(o.Flags.Flop, false),
+		Quality:        o.Quality.Quality,
+		Compression:    o.Quality.Compression,
+		NoAutoRotate:   derefBool(o.Flags.NoRotation, false),
+		NoProfile:      derefBool(o.Flags.NoProfile, false),
+		Force:          derefBool(o.Flags.Force, false),
+		Gravity:        o.Transform.Gravity,
+		Embed:          derefBool(o.Flags.Embed, false),
+		Extend:         o.Transform.Extend,
+		Interpretation: o.Transform.Colorspace,
+		StripMetadata:  derefBool(o.Flags.StripMetadata, false),
 		Type:           ImageType(o.Type),
-		Rotate:         bimg.Angle(o.Rotate),
-		Interlace:      derefBool(o.Interlace, false),
-		Palette:        derefBool(o.Palette, false),
-		Speed:          o.Speed,
+		Rotate:         bimg.Angle(o.Transform.Rotate),
+		Interlace:      derefBool(o.Flags.Interlace, false),
+		Palette:        derefBool(o.Flags.Palette, false),
+		Speed:          o.Quality.Speed,
 	}
 
-	if len(o.Background) != 0 {
-		opts.Background = bimg.Color{R: o.Background[0], G: o.Background[1], B: o.Background[2]}
+	if len(o.Transform.Background) != 0 {
+		opts.Background = bimg.Color{R: o.Transform.Background[0], G: o.Transform.Background[1], B: o.Transform.Background[2]}
 	}
 
-	if shouldTransformByAspectRatio(opts.Height, opts.Width) && o.AspectRatio != "" {
-		ar := parseAspectRatio(o.AspectRatio)
+	if shouldTransformByAspectRatio(opts.Height, opts.Width) && o.Transform.AspectRatio != "" {
+		ar := parseAspectRatio(o.Transform.AspectRatio)
 		if ar != nil {
 			opts.Width, opts.Height = transformByAspectRatio(opts.Width, opts.Height, ar)
 		}
 	}
 
-	if o.Sigma > 0 || o.MinAmpl > 0 {
+	if o.Effects.Sigma > 0 || o.Effects.MinAmpl > 0 {
 		opts.GaussianBlur = bimg.GaussianBlur{
-			Sigma:   o.Sigma,
-			MinAmpl: o.MinAmpl,
+			Sigma:   o.Effects.Sigma,
+			MinAmpl: o.Effects.MinAmpl,
 		}
 	}
 

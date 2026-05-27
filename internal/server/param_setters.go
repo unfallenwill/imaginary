@@ -61,7 +61,7 @@ var paramSetters = map[string]paramSetter{
 	// Integer fields
 	"width":       paramIntField(func(o *img.ImageOptions, v int) { o.Width = v }),
 	"height":      paramIntField(func(o *img.ImageOptions, v int) { o.Height = v }),
-	"quality":     paramIntField(func(o *img.ImageOptions, v int) { o.Quality = v }),
+	"quality":     paramIntField(func(o *img.ImageOptions, v int) { o.Quality.Quality = v }),
 	"top":         paramIntField(func(o *img.ImageOptions, v int) { o.Top = v }),
 	"left":        paramIntField(func(o *img.ImageOptions, v int) { o.Left = v }),
 	"areawidth":   paramIntField(func(o *img.ImageOptions, v int) { o.AreaWidth = v }),
