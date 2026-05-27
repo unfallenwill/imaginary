@@ -178,6 +178,30 @@ func TestDerefBool(t *testing.T) {
 	}
 }
 
+func TestShouldTransformByAspectRatio(t *testing.T) {
+	cases := []struct {
+		name   string
+		width  int
+		height int
+		want   bool
+	}{
+		{"BothZero", 0, 0, false},
+		{"BothNonZero", 300, 200, false},
+		{"WidthOnly", 300, 0, true},
+		{"HeightOnly", 0, 200, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := shouldTransformByAspectRatio(tc.height, tc.width)
+			if got != tc.want {
+				t.Errorf("shouldTransformByAspectRatio(height=%d, width=%d) = %v, want %v",
+					tc.height, tc.width, got, tc.want)
+			}
+		})
+	}
+}
+
 // intPtr returns a pointer to the given int value.
 func intPtr(v int) *int {
 	return &v
