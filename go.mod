@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0
 	github.com/h2non/bimg v1.1.7
 	github.com/h2non/filetype v1.1.0
-	github.com/rs/cors v0.0.0-20170727213201-7af7a1e09ba3
+	github.com/rs/cors v1.5.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -95,7 +95,8 @@ func TestCatchPanicRePanicsOnUnexpectedType(t *testing.T) {
 
 func TestCatchPanicRePanicsOnIntPanic(t *testing.T) {
 	defer func() {
-		if r := recover(); r == nil {
+		r := recover()
+		if r == nil {
 			t.Fatal("expected re-panic on int panic")
 		}
 		if v, ok := r.(int); !ok || v != 123 {
@@ -105,7 +106,6 @@ func TestCatchPanicRePanicsOnIntPanic(t *testing.T) {
 
 	_, _ = CatchPanic(func() (int, error) {
 		panic(123) // not error, not string → should re-panic
-		return 0, nil
 	})
 }
 

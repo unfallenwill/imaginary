@@ -26,8 +26,8 @@ func CatchPanic[T any](fn func() (T, error)) (result T, err error) {
 			case runtime.Error:
 				// Go runtime panics (nil deref, index bounds, type assertion, etc.)
 				// are programmer bugs. Re-panic so they are visible in CI.
-				fmt.Fprintln(panicWriter, "unexpected Go runtime panic in image operation:", r)
-				fmt.Fprintln(panicWriter, string(debug.Stack()))
+				_, _ = fmt.Fprintln(panicWriter, "unexpected Go runtime panic in image operation:", r)
+				_, _ = fmt.Fprintln(panicWriter, string(debug.Stack()))
 				panic(r)
 			case error:
 				// CGo/libvips panics that carry an error value — convert to *Error.
@@ -37,8 +37,8 @@ func CatchPanic[T any](fn func() (T, error)) (result T, err error) {
 				err = New(KindProcessing, value)
 			default:
 				// Any other type — also a programmer bug, re-panic.
-				fmt.Fprintln(panicWriter, "unexpected panic in image operation:", r)
-				fmt.Fprintln(panicWriter, string(debug.Stack()))
+				_, _ = fmt.Fprintln(panicWriter, "unexpected panic in image operation:", r)
+				_, _ = fmt.Fprintln(panicWriter, string(debug.Stack()))
 				panic(r)
 			}
 			result = zero[T]()
