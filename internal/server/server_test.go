@@ -452,13 +452,61 @@ func TestPathThumbnailObjectStorageWithType(t *testing.T) {
 	}
 }
 
-func TestPathThumbnailInvalidSpec(t *testing.T) {
-	cfg := testConfigWithObjectStorage([]byte("image"))
+func TestPathThumbnailAutoHeight(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	cfg := testConfigWithObjectStorage(buf)
 
 	ts := httptest.NewServer(NewServerMux(cfg))
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/thumbnail/300x0q85/uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+
+	img, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(img) == 0 {
+		t.Fatalf("Empty response body")
+	}
+}
+
+func TestPathThumbnailAutoWidth(t *testing.T) {
+	buf, _ := os.ReadFile(path.Join("../../testdata", "large.jpg"))
+	cfg := testConfigWithObjectStorage(buf)
+
+	ts := httptest.NewServer(NewServerMux(cfg))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/0x200q85/uploads/2026/05/image.jpg")
+	if err != nil {
+		t.Fatal("Cannot perform the request")
+	}
+	if res.StatusCode != 200 {
+		t.Fatalf("Invalid response status: %d", res.StatusCode)
+	}
+
+	img, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(img) == 0 {
+		t.Fatalf("Empty response body")
+	}
+}
+
+func TestPathThumbnailBothDimensionsZero(t *testing.T) {
+	cfg := testConfigWithObjectStorage([]byte("image"))
+
+	ts := httptest.NewServer(NewServerMux(cfg))
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/thumbnail/0x0q85/uploads/2026/05/image.jpg")
 	if err != nil {
 		t.Fatal("Cannot perform the request")
 	}

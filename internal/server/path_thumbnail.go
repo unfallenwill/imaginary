@@ -39,7 +39,7 @@ func pathThumbnailController(cfg Config, resolver *source.Resolver) func(http.Re
 			ErrorReply(w, r, err, cfg.Error)
 			return
 		}
-		if cfg.MaxAllowedPixels > 0 && (float64(params.Width)*float64(params.Height))/megaPixel > cfg.MaxAllowedPixels {
+		if cfg.MaxAllowedPixels > 0 && params.Width > 0 && params.Height > 0 && (float64(params.Width)*float64(params.Height))/megaPixel > cfg.MaxAllowedPixels {
 			ErrorReply(w, r, img.ErrResolutionTooBig, cfg.Error)
 			return
 		}
@@ -152,12 +152,15 @@ func parseThumbnailSpec(spec string) (int, int, int, string, error) {
 	}
 
 	width, err := strconv.Atoi(parts[0])
-	if err != nil || width <= 0 {
+	if err != nil || width < 0 {
 		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail width")
 	}
 	height, err := strconv.Atoi(parts[1])
-	if err != nil || height <= 0 {
+	if err != nil || height < 0 {
 		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail height")
+	}
+	if width == 0 && height == 0 {
+		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail dimensions: width and height cannot both be zero")
 	}
 
 	return width, height, quality, imageType, nil
