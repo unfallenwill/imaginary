@@ -212,28 +212,19 @@ func Rotate(buf []byte, o ImageOptions) (Image, error) {
 }
 
 // AutoRotate automatically rotates the image based on its EXIF orientation.
-func AutoRotate(buf []byte, o ImageOptions) (out Image, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch value := r.(type) {
-			case error:
-				err = Wrap(KindProcessing, "libvips processing error", value)
-			case string:
-				err = New(KindProcessing, value)
-			default:
-				err = New(KindProcessing, "libvips internal error")
-			}
-			out = Image{}
+// Panics originating from the CGo/libvips layer are recovered and converted to
+// errors via CatchPanic. Genuine Go panics (nil deref, bounds, etc.) re-panic
+// so they are visible during development and CI.
+func AutoRotate(buf []byte, o ImageOptions) (Image, error) {
+	return CatchPanic(func() (Image, error) {
+		ibuf, err := bimg.NewImage(buf).AutoRotate()
+		if err != nil {
+			return Image{}, Wrap(KindProcessing, "auto-rotate failed", err)
 		}
-	}()
 
-	ibuf, err := bimg.NewImage(buf).AutoRotate()
-	if err != nil {
-		return Image{}, Wrap(KindProcessing, "auto-rotate failed", err)
-	}
-
-	mime := GetImageMimeType(bimg.DetermineImageType(ibuf))
-	return Image{Body: ibuf, Mime: mime}, nil
+		mime := GetImageMimeType(bimg.DetermineImageType(ibuf))
+		return Image{Body: ibuf, Mime: mime}, nil
+	})
 }
 
 // Flip flips the image vertically.
@@ -391,32 +382,23 @@ func Pipeline(buf []byte, o ImageOptions) (Image, error) {
 }
 
 // Process applies bimg resize options to the image buffer.
-func Process(buf []byte, opts bimg.Options) (out Image, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch value := r.(type) {
-			case error:
-				err = Wrap(KindProcessing, "libvips processing error", value)
-			case string:
-				err = New(KindProcessing, value)
-			default:
-				err = New(KindProcessing, "libvips internal error")
-			}
-			out = Image{}
+// Panics originating from the CGo/libvips layer are recovered and converted to
+// errors via CatchPanic. Genuine Go panics (nil deref, bounds, etc.) re-panic
+// so they are visible during development and CI.
+func Process(buf []byte, opts bimg.Options) (Image, error) {
+	return CatchPanic(func() (Image, error) {
+		ibuf, err := bimg.Resize(buf, opts)
+
+		if err != nil && strings.Contains(err.Error(), "encode") && (opts.Type == bimg.WEBP || opts.Type == bimg.HEIF) {
+			opts.Type = bimg.JPEG
+			ibuf, err = bimg.Resize(buf, opts)
 		}
-	}()
 
-	ibuf, err := bimg.Resize(buf, opts)
+		if err != nil {
+			return Image{}, Wrap(KindProcessing, "error processing image", err)
+		}
 
-	if err != nil && strings.Contains(err.Error(), "encode") && (opts.Type == bimg.WEBP || opts.Type == bimg.HEIF) {
-		opts.Type = bimg.JPEG
-		ibuf, err = bimg.Resize(buf, opts)
-	}
-
-	if err != nil {
-		return Image{}, Wrap(KindProcessing, "error processing image", err)
-	}
-
-	mime := GetImageMimeType(bimg.DetermineImageType(ibuf))
-	return Image{Body: ibuf, Mime: mime}, nil
+		mime := GetImageMimeType(bimg.DetermineImageType(ibuf))
+		return Image{Body: ibuf, Mime: mime}, nil
+	})
 }

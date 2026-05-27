@@ -76,7 +76,7 @@ func Server(cfg Config) {
 	}
 
 	addr := cfg.Addr + ":" + strconv.Itoa(cfg.Port)
-	handler := NewLog(NewServerMux(cfg), os.Stdout, cfg.LogLevel)
+	handler := RecoverHandler(NewLog(NewServerMux(cfg), os.Stdout, cfg.LogLevel))
 
 	server := &http.Server{
 		Addr:           addr,
