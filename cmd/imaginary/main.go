@@ -104,8 +104,11 @@ func main() {
 
 	runtime.GOMAXPROCS(cfg.CPUs)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	if cfg.MRelease > 0 {
-		startMemoryRelease(cfg.MRelease)
+		startMemoryRelease(ctx, cfg.MRelease)
 	}
 
 	placeholderImage, placeholderEnabled, err := cfg.ResolvePlaceholder()
@@ -154,6 +157,7 @@ func main() {
 	debug("imaginary server listening on port :%d/%s", serverCfg.Port, strings.TrimPrefix(serverCfg.PathPrefix, "/"))
 
 	server.Server(serverCfg)
+	cancel()
 }
 
 func resolveObjectStorage(cfg config.Config) (source.ObjectStorage, error) {
@@ -178,12 +182,18 @@ func buildResolver(cfg config.Config, objectStorage source.ObjectStorage) *sourc
 	)
 }
 
-func startMemoryRelease(interval int) {
+func startMemoryRelease(ctx context.Context, interval int) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	go func() {
-		for range ticker.C {
-			debug("FreeOSMemory()")
-			d.FreeOSMemory()
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				debug("FreeOSMemory()")
+				d.FreeOSMemory()
+			}
 		}
 	}()
 }

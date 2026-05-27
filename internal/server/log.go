@@ -1,34 +1,26 @@
 package server
 
 import (
-	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
 )
 
-const formatPattern = "%s - - [%s] \"%s\" %d %d %.4f\n"
-
-// LogRecord implements an Apache-compatible HTTP logging
+// LogRecord implements an HTTP logging record that captures request/response metadata.
 type LogRecord struct {
 	http.ResponseWriter
-	status                int
-	responseBytes         int64
-	ip                    string
-	method, uri, protocol string
-	time                  time.Time
-	elapsedTime           time.Duration
+	status        int
+	responseBytes int64
+	ip            string
+	method        string
+	uri           string
+	protocol      string
+	elapsedTime   time.Duration
 }
 
-// Log writes a log entry in the passed io.Writer stream
-func (r *LogRecord) Log(out io.Writer) {
-	timeFormat := r.time.Format("02/Jan/2006 15:04:05")
-	request := fmt.Sprintf("%s %s %s", r.method, r.uri, r.protocol)
-	_, _ = fmt.Fprintf(out, formatPattern, r.ip, timeFormat, request, r.status, r.responseBytes, r.elapsedTime.Seconds())
-}
-
-// Write acts like a proxy passing the given bytes buffer to the ResponseWritter
+// Write acts like a proxy passing the given bytes buffer to the ResponseWriter
 // and additionally counting the passed amount of bytes for logging usage.
 func (r *LogRecord) Write(p []byte) (int, error) {
 	written, err := r.ResponseWriter.Write(p)
@@ -36,25 +28,43 @@ func (r *LogRecord) Write(p []byte) (int, error) {
 	return written, err
 }
 
-// WriteHeader calls ResponseWriter.WriteHeader() and sets the status code
+// WriteHeader calls ResponseWriter.WriteHeader() and sets the status code.
 func (r *LogRecord) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
 }
 
-// LogHandler maps the HTTP handler with a custom io.Writer compatible stream
+// LogHandler maps the HTTP handler with a custom io.Writer compatible stream.
 type LogHandler struct {
-	handler  http.Handler
-	io       io.Writer
-	logLevel string
+	handler http.Handler
+	logger  *slog.Logger
+	level   slog.Level
 }
 
-// NewLog creates a new logger
-func NewLog(handler http.Handler, io io.Writer, logLevel string) http.Handler {
-	return &LogHandler{handler, io, logLevel}
+// NewLog creates a new logger using slog with JSON output.
+func NewLog(handler http.Handler, out io.Writer, logLevel string) http.Handler {
+	level := parseLogLevel(logLevel)
+	handlerOpts := &slog.HandlerOptions{
+		Level: level,
+	}
+	logger := slog.New(slog.NewJSONHandler(out, handlerOpts))
+	return &LogHandler{handler: handler, logger: logger, level: level}
 }
 
-// Implements the required method as standard HTTP handler, serving the request.
+func parseLogLevel(logLevel string) slog.Level {
+	switch strings.ToLower(logLevel) {
+	case "error":
+		return slog.LevelError
+	case "warning", "warn":
+		return slog.LevelWarn
+	case "info":
+		return slog.LevelInfo
+	default:
+		return slog.LevelInfo
+	}
+}
+
+// ServeHTTP implements the standard HTTP handler, serving the request and logging structured output.
 func (h *LogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	clientIP := r.RemoteAddr
 	if colon := strings.LastIndex(clientIP, ":"); colon != -1 {
@@ -64,31 +74,38 @@ func (h *LogHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	record := &LogRecord{
 		ResponseWriter: w,
 		ip:             clientIP,
-		time:           time.Time{},
 		method:         r.Method,
 		uri:            r.RequestURI,
 		protocol:       r.Proto,
 		status:         http.StatusOK,
-		elapsedTime:    time.Duration(0),
 	}
 
 	startTime := time.Now()
 	h.handler.ServeHTTP(record, r)
-	finishTime := time.Now()
+	elapsedTime := time.Since(startTime)
 
-	record.time = finishTime.UTC()
-	record.elapsedTime = finishTime.Sub(startTime)
-
-	switch h.logLevel {
-	case "error":
-		if record.status >= http.StatusInternalServerError {
-			record.Log(h.io)
-		}
-	case "warning":
-		if record.status >= http.StatusBadRequest {
-			record.Log(h.io)
-		}
-	case "info":
-		record.Log(h.io)
+	// Determine the appropriate log level based on status code.
+	var level slog.Level
+	switch {
+	case record.status >= http.StatusInternalServerError:
+		level = slog.LevelError
+	case record.status >= http.StatusBadRequest:
+		level = slog.LevelWarn
+	default:
+		level = slog.LevelInfo
 	}
+
+	// Skip logging if the determined level is below the configured threshold.
+	if !h.logger.Enabled(r.Context(), level) {
+		return
+	}
+
+	h.logger.LogAttrs(r.Context(), level, "http request",
+		slog.String("method", record.method),
+		slog.String("path", record.uri),
+		slog.Int("status", record.status),
+		slog.Duration("duration", elapsedTime),
+		slog.Int64("bytes", record.responseBytes),
+		slog.String("ip", record.ip),
+	)
 }
