@@ -131,39 +131,52 @@ func parseThumbnailSpec(spec string) (int, int, int, string, error) {
 		return 0, 0, 0, "", err
 	}
 
-	dimensions := spec
-	quality := 0
+	dimensions, quality, err := parseThumbnailQuality(spec)
+	if err != nil {
+		return 0, 0, 0, "", err
+	}
 
+	width, height, err := parseThumbnailDimensions(dimensions)
+	if err != nil {
+		return 0, 0, 0, "", err
+	}
+
+	return width, height, quality, imageType, nil
+}
+
+func parseThumbnailQuality(spec string) (dimensions string, quality int, err error) {
+	dimensions = spec
 	if idx := strings.LastIndex(spec, "q"); idx > -1 {
 		dimensions = spec[:idx]
 		if dimensions == "" || spec[idx+1:] == "" {
-			return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail spec")
+			return "", 0, img.New(img.KindInvalidParam, "invalid thumbnail spec")
 		}
-		var err error
 		quality, err = strconv.Atoi(spec[idx+1:])
 		if err != nil || quality < 1 || quality > 100 {
-			return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail quality")
+			return "", 0, img.New(img.KindInvalidParam, "invalid thumbnail quality")
 		}
 	}
+	return dimensions, quality, nil
+}
 
+func parseThumbnailDimensions(dimensions string) (int, int, error) {
 	parts := strings.Split(dimensions, "x")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail dimensions")
+		return 0, 0, img.New(img.KindInvalidParam, "invalid thumbnail dimensions")
 	}
 
 	width, err := strconv.Atoi(parts[0])
 	if err != nil || width < 0 {
-		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail width")
+		return 0, 0, img.New(img.KindInvalidParam, "invalid thumbnail width")
 	}
 	height, err := strconv.Atoi(parts[1])
 	if err != nil || height < 0 {
-		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail height")
+		return 0, 0, img.New(img.KindInvalidParam, "invalid thumbnail height")
 	}
 	if width == 0 && height == 0 {
-		return 0, 0, 0, "", img.New(img.KindInvalidParam, "invalid thumbnail dimensions: width and height cannot both be zero")
+		return 0, 0, img.New(img.KindInvalidParam, "invalid thumbnail dimensions: width and height cannot both be zero")
 	}
-
-	return width, height, quality, imageType, nil
+	return width, height, nil
 }
 
 func splitThumbnailSpecType(spec string) (string, string, error) {
