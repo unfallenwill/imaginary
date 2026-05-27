@@ -12,7 +12,7 @@ func TestBimgOptions(t *testing.T) {
 	}
 	opts := image.BimgOptions(imgOpts)
 
-	if opts.Width != imgOpts.Dimensions.Width || opts.Height != imgOpts.Dimensions.Height {
+	if opts.Width != imgOpts.Width || opts.Height != imgOpts.Height {
 		t.Error("Invalid width and height")
 	}
 }

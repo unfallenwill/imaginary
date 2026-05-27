@@ -217,19 +217,19 @@ func (p PipelineParams) ToImageOptions() ImageOptions {
 	}
 
 	if p.Color != "" {
-		opts.WatermarkOpts.Color = ParseColor(p.Color)
+		opts.Color = ParseColor(p.Color)
 	}
 	if p.Background != "" {
-		opts.Transform.Background = ParseColor(p.Background)
+		opts.Background = ParseColor(p.Background)
 	}
 	if p.Colorspace != "" {
-		opts.Transform.Colorspace = ParseColorspace(p.Colorspace)
+		opts.Colorspace = ParseColorspace(p.Colorspace)
 	}
 	if p.Gravity != "" {
-		opts.Transform.Gravity = ParseGravity(p.Gravity)
+		opts.Gravity = ParseGravity(p.Gravity)
 	}
 	if p.Extend != "" {
-		opts.Transform.Extend = ParseExtendMode(p.Extend)
+		opts.Extend = ParseExtendMode(p.Extend)
 	}
 
 	return opts
@@ -286,42 +286,42 @@ func shouldTransformByAspectRatio(height, width int) bool {
 // BimgOptions creates a new bimg compatible options struct mapping the fields properly
 func BimgOptions(o ImageOptions) bimg.Options {
 	opts := bimg.Options{
-		Width:          o.Dimensions.Width,
-		Height:         o.Dimensions.Height,
-		Flip:           derefBool(o.Flags.Flip, false),
-		Flop:           derefBool(o.Flags.Flop, false),
+		Width:          o.Width,
+		Height:         o.Height,
+		Flip:           derefBool(o.Flip, false),
+		Flop:           derefBool(o.Flop, false),
 		Quality:        o.Quality.Quality,
-		Compression:    o.Quality.Compression,
-		NoAutoRotate:   derefBool(o.Flags.NoRotation, false),
-		NoProfile:      derefBool(o.Flags.NoProfile, false),
-		Force:          derefBool(o.Flags.Force, false),
-		Gravity:        o.Transform.Gravity,
-		Embed:          derefBool(o.Flags.Embed, false),
-		Extend:         o.Transform.Extend,
-		Interpretation: o.Transform.Colorspace,
-		StripMetadata:  derefBool(o.Flags.StripMetadata, false),
+		Compression:    o.Compression,
+		NoAutoRotate:   derefBool(o.NoRotation, false),
+		NoProfile:      derefBool(o.NoProfile, false),
+		Force:          derefBool(o.Force, false),
+		Gravity:        o.Gravity,
+		Embed:          derefBool(o.Embed, false),
+		Extend:         o.Extend,
+		Interpretation: o.Colorspace,
+		StripMetadata:  derefBool(o.StripMetadata, false),
 		Type:           ImageType(o.Type),
-		Rotate:         bimg.Angle(o.Transform.Rotate),
-		Interlace:      derefBool(o.Flags.Interlace, false),
-		Palette:        derefBool(o.Flags.Palette, false),
-		Speed:          o.Quality.Speed,
+		Rotate:         bimg.Angle(o.Rotate),
+		Interlace:      derefBool(o.Interlace, false),
+		Palette:        derefBool(o.Palette, false),
+		Speed:          o.Speed,
 	}
 
-	if len(o.Transform.Background) != 0 {
-		opts.Background = bimg.Color{R: o.Transform.Background[0], G: o.Transform.Background[1], B: o.Transform.Background[2]}
+	if len(o.Background) != 0 {
+		opts.Background = bimg.Color{R: o.Background[0], G: o.Background[1], B: o.Background[2]}
 	}
 
-	if shouldTransformByAspectRatio(opts.Height, opts.Width) && o.Transform.AspectRatio != "" {
-		ar := parseAspectRatio(o.Transform.AspectRatio)
+	if shouldTransformByAspectRatio(opts.Height, opts.Width) && o.AspectRatio != "" {
+		ar := parseAspectRatio(o.AspectRatio)
 		if ar != nil {
 			opts.Width, opts.Height = transformByAspectRatio(opts.Width, opts.Height, ar)
 		}
 	}
 
-	if o.Effects.Sigma > 0 || o.Effects.MinAmpl > 0 {
+	if o.Sigma > 0 || o.MinAmpl > 0 {
 		opts.GaussianBlur = bimg.GaussianBlur{
-			Sigma:   o.Effects.Sigma,
-			MinAmpl: o.Effects.MinAmpl,
+			Sigma:   o.Sigma,
+			MinAmpl: o.MinAmpl,
 		}
 	}
 

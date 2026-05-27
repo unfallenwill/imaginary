@@ -17,7 +17,6 @@ type LogRecord struct {
 	method        string
 	uri           string
 	protocol      string
-	elapsedTime   time.Duration
 }
 
 // Write acts like a proxy passing the given bytes buffer to the ResponseWriter
