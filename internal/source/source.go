@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/h2non/imaginary/internal/image"
 )
@@ -50,9 +49,6 @@ func (r *Resolver) Match(req *http.Request) ImageSource {
 	}
 	return nil
 }
-
-// ObjectStorageTimeout is the default timeout for object storage operations.
-const ObjectStorageTimeout = 30 * time.Second
 
 // ValidateObjectKey checks that an object storage key is safe to use.
 func ValidateObjectKey(key string) error {

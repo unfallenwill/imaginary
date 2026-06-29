@@ -18,8 +18,8 @@ type Dimensions struct {
 	Margin     int
 }
 
-// Quality groups quality and compression related fields.
-type Quality struct {
+// QualityOptions groups quality and compression related fields.
+type QualityOptions struct {
 	Quality     int
 	Compression int
 	Speed       int
@@ -78,7 +78,7 @@ type PipelineOpts struct {
 // Boolean fields use *bool so that "explicitly set to false" can be distinguished from "not set".
 type ImageOptions struct {
 	Dimensions
-	Quality
+	QualityOptions
 	Effects
 	WatermarkOpts
 	Flags
@@ -176,7 +176,7 @@ func (p PipelineParams) ToImageOptions() ImageOptions {
 			AreaHeight: derefInt(p.AreaHeight),
 			Margin:     derefInt(p.Margin),
 		},
-		Quality: Quality{
+		QualityOptions: QualityOptions{
 			Quality:     derefInt(p.Quality),
 			Compression: derefInt(p.Compression),
 			Speed:       derefInt(p.Speed),
@@ -290,7 +290,7 @@ func BimgOptions(o ImageOptions) bimg.Options {
 		Height:         o.Height,
 		Flip:           derefBool(o.Flip, false),
 		Flop:           derefBool(o.Flop, false),
-		Quality:        o.Quality.Quality,
+		Quality:        o.Quality,
 		Compression:    o.Compression,
 		NoAutoRotate:   derefBool(o.NoRotation, false),
 		NoProfile:      derefBool(o.NoProfile, false),
