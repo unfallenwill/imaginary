@@ -203,6 +203,25 @@ func TestMetadataDisabledEndpoint(t *testing.T) {
 	}
 }
 
+func TestDetectMediaTypeAudio(t *testing.T) {
+	tests := []struct {
+		name string
+		buf  []byte
+	}{
+		{name: "MP3", buf: []byte{'I', 'D', '3', 4, 0, 0}},
+		{name: "M4A", buf: []byte{0, 0, 0, 12, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}},
+		{name: "WAV", buf: []byte{'R', 'I', 'F', 'F', 0, 0, 0, 0, 'W', 'A', 'V', 'E'}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := detectMediaType(tt.buf); got != metadata.MediaTypeAudio {
+				t.Fatalf("Expected audio media type, got %v", got)
+			}
+		})
+	}
+}
+
 func testMetadataConfig() Config {
 	return Config{
 		PathPrefix:       "/",

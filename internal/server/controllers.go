@@ -161,28 +161,34 @@ func frameController(cfg Config, resolver *source.Resolver) func(http.ResponseWr
 	}
 }
 
-// detectMediaType determines whether the byte buffer contains an image or video.
-// It checks image MIME types first (via bimg support), then falls back to
-// video detection via MIME prefix and magic byte signatures.
+// detectMediaType determines whether the byte buffer contains an image, video, or audio file.
+// It checks image support first, then known file signatures and MIME prefixes,
+// before falling back to video container signatures.
 func detectMediaType(buf []byte) metadata.MediaType {
 	mime := detectImageMimeType(buf)
 	if img.IsImageMimeTypeSupported(mime) {
 		return metadata.MediaTypeImage
 	}
 
+	kind, err := filetype.Get(buf)
+	if err == nil {
+		switch {
+		case strings.HasPrefix(kind.MIME.Value, "audio/"):
+			return metadata.MediaTypeAudio
+		case strings.HasPrefix(kind.MIME.Value, "video/"):
+			return metadata.MediaTypeVideo
+		}
+	}
+
+	if strings.HasPrefix(mime, "audio/") {
+		return metadata.MediaTypeAudio
+	}
 	if strings.HasPrefix(mime, "video/") {
 		return metadata.MediaTypeVideo
 	}
 
 	if isVideoByMagicBytes(buf) {
 		return metadata.MediaTypeVideo
-	}
-
-	kind, err := filetype.Get(buf)
-	if err == nil {
-		if strings.HasPrefix(kind.MIME.Value, "video/") {
-			return metadata.MediaTypeVideo
-		}
 	}
 
 	return metadata.MediaTypeUnknown
@@ -194,7 +200,7 @@ func isVideoByMagicBytes(buf []byte) bool {
 		return false
 	}
 
-	// MP4/MOV/M4A: ftyp box at offset 4
+	// MP4/MOV: ftyp box at offset 4. Known M4A signatures are classified above.
 	if len(buf) > 8 && string(buf[4:8]) == "ftyp" {
 		return true
 	}

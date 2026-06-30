@@ -38,6 +38,15 @@ func TestExtractImage(t *testing.T) {
 	if meta.Video != nil {
 		t.Fatal("Video metadata should be nil for image input")
 	}
+	if meta.Audio != nil {
+		t.Fatal("Audio metadata should be nil for image input")
+	}
+	if meta.SizeBytes != int64(len(buf)) {
+		t.Errorf("Expected sizeBytes=%d, got %d", len(buf), meta.SizeBytes)
+	}
+	if meta.MIMEType != "image/jpeg" {
+		t.Errorf("Expected mimeType=image/jpeg, got %s", meta.MIMEType)
+	}
 
 	img := meta.Image
 	if img.Width != 550 {

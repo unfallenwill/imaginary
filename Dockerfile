@@ -48,6 +48,16 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     -ldflags="-s -w -X github.com/h2non/imaginary/internal/version.Version=${IMAGINARY_VERSION}" \
     ./cmd/imaginary
 
+# ---- FFmpeg test stage ----
+FROM builder AS tester
+
+ARG BUILD_TAGS="ffmpeg"
+
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 \
+    go test -tags "${BUILD_TAGS}" ./...
+
 # ---- Runtime stage ----
 FROM ubuntu:26.04
 

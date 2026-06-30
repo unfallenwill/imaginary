@@ -4,8 +4,10 @@ package metadata
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/asticode/go-astiav"
+	"github.com/h2non/filetype"
 
 	"github.com/h2non/imaginary/internal/avio"
 	img "github.com/h2non/imaginary/internal/image"
@@ -13,10 +15,10 @@ import (
 
 const durationTimeBase = float64(astiav.TimeBase) // AV_TIME_BASE = 1,000,000
 
-// ExtractVideo extracts metadata from a video buffer using FFmpeg via go-astiav.
+// ExtractAV extracts metadata from an audio or video buffer using FFmpeg via go-astiav.
 // It creates a custom AVIO context to read from the []byte buffer without
 // writing to a temporary file.
-func ExtractVideo(buf []byte) (MetadataResult, error) {
+func ExtractAV(buf []byte) (MetadataResult, error) {
 	formatCtx := astiav.AllocFormatContext()
 	if formatCtx == nil {
 		return MetadataResult{}, img.New(img.KindProcessing, "Cannot allocate format context")
@@ -32,7 +34,7 @@ func ExtractVideo(buf []byte) (MetadataResult, error) {
 	formatCtx.SetPb(ioCtx)
 
 	if err := formatCtx.OpenInput("", nil, nil); err != nil {
-		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot open video", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot open media", err)
 	}
 	defer formatCtx.CloseInput()
 
@@ -40,50 +42,151 @@ func ExtractVideo(buf []byte) (MetadataResult, error) {
 		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot find stream info", err)
 	}
 
-	result := buildVideoMetadata(formatCtx, len(buf))
+	result, err := buildAVMetadata(formatCtx, buf)
+	if err != nil {
+		return MetadataResult{}, err
+	}
 
 	body, err := json.Marshal(result)
 	if err != nil {
-		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot serialize video metadata", err)
+		return MetadataResult{}, img.Wrap(img.KindProcessing, "Cannot serialize media metadata", err)
 	}
 
 	return MetadataResult{Body: body, Mime: "application/json"}, nil
 }
 
-// buildVideoMetadata constructs VideoMetadata from a probed FormatContext.
-func buildVideoMetadata(fc *astiav.FormatContext, fileSize int) Metadata {
-	videoMeta := VideoMetadata{
-		Size:    int64(fileSize),
-		Streams: []StreamMetadata{},
-	}
-
+// buildAVMetadata classifies the probed streams and constructs audio or video metadata.
+func buildAVMetadata(fc *astiav.FormatContext, buf []byte) (Metadata, error) {
+	format := ""
 	if ifmt := fc.InputFormat(); ifmt != nil {
-		videoMeta.Format = ifmt.Name()
+		format = ifmt.Name()
 	}
 
+	duration := mediaDuration(fc)
+	hasVideo := false
+	hasAudio := false
+	streams := make([]StreamMetadata, 0, len(fc.Streams()))
+
+	for _, stream := range fc.Streams() {
+		switch stream.CodecParameters().MediaType() {
+		case astiav.MediaTypeVideo:
+			if isVisualVideoStream(stream) {
+				hasVideo = true
+			}
+		case astiav.MediaTypeAudio:
+			hasAudio = true
+		}
+		streams = append(streams, buildStreamMetadata(stream))
+	}
+
+	if hasVideo {
+		width, height := primaryVideoDimensions(fc)
+		videoMeta := VideoMetadata{
+			Format:   format,
+			Duration: duration,
+			Size:     int64(len(buf)),
+			Width:    width,
+			Height:   height,
+			BitRate:  fc.BitRate(),
+			Streams:  streams,
+		}
+		if md := fc.Metadata(); md != nil {
+			videoMeta.Tags = dictToMap(md)
+		}
+
+		return Metadata{
+			MediaType: "video",
+			SizeBytes: int64(len(buf)),
+			MIMEType:  avMIMEType(buf, "video", format),
+			Video:     &videoMeta,
+		}, nil
+	}
+
+	if hasAudio {
+		return Metadata{
+			MediaType: "audio",
+			SizeBytes: int64(len(buf)),
+			MIMEType:  avMIMEType(buf, "audio", format),
+			Audio: &AudioMetadata{
+				Format:   format,
+				Duration: duration,
+			},
+		}, nil
+	}
+
+	return Metadata{}, img.New(img.KindUnsupportedMedia, "No audio or video stream found")
+}
+
+func mediaDuration(fc *astiav.FormatContext) float64 {
 	if dur := fc.Duration(); dur > 0 {
-		videoMeta.Duration = float64(dur) / durationTimeBase
+		return float64(dur) / durationTimeBase
 	}
 
-	videoMeta.BitRate = fc.BitRate()
+	var duration float64
+	for _, stream := range fc.Streams() {
+		dur := stream.Duration()
+		timeBase := stream.TimeBase()
+		if dur > 0 && timeBase.Den() > 0 {
+			streamDuration := float64(dur) * timeBase.Float64()
+			if streamDuration > duration {
+				duration = streamDuration
+			}
+		}
+	}
+	return duration
+}
 
-	if md := fc.Metadata(); md != nil {
-		videoMeta.Tags = dictToMap(md)
+func primaryVideoDimensions(fc *astiav.FormatContext) (int, int) {
+	if stream, _, err := fc.FindBestStream(astiav.MediaTypeVideo, -1, -1); err == nil {
+		if isVisualVideoStream(stream) {
+			params := stream.CodecParameters()
+			return params.Width(), params.Height()
+		}
 	}
 
 	for _, stream := range fc.Streams() {
-		sm := buildStreamMetadata(fc, stream)
-		videoMeta.Streams = append(videoMeta.Streams, sm)
+		if isVisualVideoStream(stream) {
+			params := stream.CodecParameters()
+			return params.Width(), params.Height()
+		}
+	}
+	return 0, 0
+}
+
+func isVisualVideoStream(stream *astiav.Stream) bool {
+	if stream.CodecParameters().MediaType() != astiav.MediaTypeVideo {
+		return false
+	}
+	flags := stream.DispositionFlags()
+	return !flags.Has(astiav.DispositionFlagAttachedPic) &&
+		!flags.Has(astiav.DispositionFlagStillImage) &&
+		!flags.Has(astiav.DispositionFlagTimedThumbnails)
+}
+
+func avMIMEType(buf []byte, mediaType, format string) string {
+	kind, err := filetype.Get(buf)
+	if err == nil && kind.MIME.Value != "" {
+		mimeType := kind.MIME.Value
+		if mediaType == "audio" && strings.HasPrefix(mimeType, "video/") {
+			if strings.Contains(format, "mp4") || strings.Contains(format, "mov") {
+				return "audio/mp4"
+			}
+			return "audio/" + strings.TrimPrefix(mimeType, "video/")
+		}
+		if mediaType == "video" && strings.HasPrefix(mimeType, "audio/") {
+			if strings.Contains(format, "mp4") || strings.Contains(format, "mov") {
+				return "video/mp4"
+			}
+			return "video/" + strings.TrimPrefix(mimeType, "audio/")
+		}
+		return mimeType
 	}
 
-	return Metadata{
-		MediaType: "video",
-		Video:     &videoMeta,
-	}
+	return "application/octet-stream"
 }
 
 // buildStreamMetadata extracts metadata from a single stream.
-func buildStreamMetadata(fc *astiav.FormatContext, s *astiav.Stream) StreamMetadata {
+func buildStreamMetadata(s *astiav.Stream) StreamMetadata {
 	cp := s.CodecParameters()
 
 	sm := StreamMetadata{

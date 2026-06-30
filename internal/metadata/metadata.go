@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/h2non/bimg"
 
@@ -14,15 +15,19 @@ type MediaType int
 const (
 	MediaTypeImage MediaType = iota
 	MediaTypeVideo
+	MediaTypeAudio
 	MediaTypeUnknown
 )
 
 // Metadata holds the extracted metadata from any media type.
-// Only one of Image or Video will be populated, based on the media type.
+// Only one of Image, Video, or Audio will be populated, based on the media type.
 type Metadata struct {
 	MediaType string         `json:"mediaType"`
+	SizeBytes int64          `json:"sizeBytes"`
+	MIMEType  string         `json:"mimeType"`
 	Image     *ImageMetadata `json:"image,omitempty"`
 	Video     *VideoMetadata `json:"video,omitempty"`
+	Audio     *AudioMetadata `json:"audio,omitempty"`
 }
 
 // ImageMetadata contains metadata extracted from an image via bimg.
@@ -43,9 +48,17 @@ type VideoMetadata struct {
 	Format   string            `json:"format"`
 	Duration float64           `json:"duration"`
 	Size     int64             `json:"size"`
+	Width    int               `json:"width"`
+	Height   int               `json:"height"`
 	BitRate  int64             `json:"bitRate"`
 	Tags     map[string]string `json:"tags,omitempty"`
 	Streams  []StreamMetadata  `json:"streams"`
+}
+
+// AudioMetadata contains metadata extracted from an audio file via FFmpeg.
+type AudioMetadata struct {
+	Format   string  `json:"format"`
+	Duration float64 `json:"duration"`
 }
 
 // StreamMetadata describes a single stream (video/audio/subtitle) in a video.
@@ -74,8 +87,8 @@ func Extract(buf []byte, mediaType MediaType) (MetadataResult, error) {
 	switch mediaType {
 	case MediaTypeImage:
 		return ExtractImage(buf)
-	case MediaTypeVideo:
-		return ExtractVideo(buf)
+	case MediaTypeVideo, MediaTypeAudio:
+		return ExtractAV(buf)
 	default:
 		return MetadataResult{}, img.New(img.KindUnsupportedMedia, "Unsupported media type for metadata extraction")
 	}
@@ -102,6 +115,8 @@ func ExtractImage(buf []byte) (MetadataResult, error) {
 
 	result := Metadata{
 		MediaType: "image",
+		SizeBytes: int64(len(buf)),
+		MIMEType:  imageMIMEType(meta.Type),
 		Image:     &imageMeta,
 	}
 
@@ -111,4 +126,17 @@ func ExtractImage(buf []byte) (MetadataResult, error) {
 	}
 
 	return MetadataResult{Body: body, Mime: "application/json"}, nil
+}
+
+func imageMIMEType(imageType string) string {
+	switch strings.ToLower(imageType) {
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "svg":
+		return "image/svg+xml"
+	case "":
+		return "application/octet-stream"
+	default:
+		return "image/" + strings.ToLower(imageType)
+	}
 }

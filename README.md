@@ -663,6 +663,54 @@ Returns the image metadata as JSON:
 }
 ```
 
+#### GET | POST /metadata
+Accepts: `image/*, video/*, audio/*, multipart/form-data`. Content-Type: `application/json`
+
+Returns metadata for images, videos, and audio files. `sizeBytes` is the original
+file size in bytes. Video and audio extraction require an FFmpeg-enabled build.
+
+Image response:
+```json
+{
+  "mediaType": "image",
+  "sizeBytes": 106086,
+  "mimeType": "image/jpeg",
+  "image": {
+    "width": 550,
+    "height": 740,
+    "type": "jpeg"
+  }
+}
+```
+
+Video response:
+```json
+{
+  "mediaType": "video",
+  "sizeBytes": 1234567,
+  "mimeType": "video/mp4",
+  "video": {
+    "format": "mov,mp4,m4a,3gp,3g2,mj2",
+    "duration": 12.5,
+    "width": 1920,
+    "height": 1080
+  }
+}
+```
+
+Audio response:
+```json
+{
+  "mediaType": "audio",
+  "sizeBytes": 345678,
+  "mimeType": "audio/mpeg",
+  "audio": {
+    "format": "mp3",
+    "duration": 180.5
+  }
+}
+```
+
 #### GET | POST /crop
 Accepts: `image/*, multipart/form-data`. Content-Type: `image/*`
 
